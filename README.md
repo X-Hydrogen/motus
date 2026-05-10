@@ -160,7 +160,8 @@ motus/
 │   ├── rdf_elements.png
 │   ├── sima_radial_L_Torsions_1.png
 │   └── ...
-├── desmond-analysis.sh            ← Main entry point (orchestrator)
+├── desmond-md.sh                  ← Automated MD job submission & monitoring
+├── desmond-analysis.sh            ← Post-processing pipeline (orchestrator)
 ├── desmond_plot.py                ← Publication-quality figure generator
 ├── rdf_gen.py                     ← Radial distribution function (g(r) + n(r))
 ├── sima_gen.py                    ← SIMA .dat generator (no GUI required)
@@ -171,9 +172,27 @@ motus/
 
 ## Components
 
-### `desmond-analysis.sh` — Orchestrator
+### `desmond-md.sh` — MD Job Runner
 
-The main driver. Detects system type, runs all applicable analyses, generates a text report, and optionally produces publication figures.
+Submits and monitors Desmond MD simulations from a setup folder. Handles GPU reservation, `.msj` generation with 5-stage equilibration, and background execution.
+
+```
+Usage:
+  desmond-md.sh <desmond_setup_XXXXX> [OPTIONS]
+
+Options:
+  -t  <ps>     Simulation time (default: 2000 ps)
+  -i  <ps>     Recording interval (default: 1 ps)
+  -T  <K>      Temperature (default: 300 K)
+  -P  <bar>    Pressure (default: 1.01325 bar)
+  -g  <ids>    GPU device IDs (default: 0)
+- `-w`            Wait for job completion
+  --dry-run     Generate .msj without submitting
+```
+
+### `desmond-analysis.sh` — Post-Processing Orchestrator
+
+The main driver.
 
 ```
 Usage:
