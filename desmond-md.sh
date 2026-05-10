@@ -30,7 +30,35 @@ PRESSURE=1.01325       # bar
 CUTOFF=5.0             # Å
 CPU=1
 GPU_LICENSE=16
-SCHRODINGER="${SCHRODINGER:-/home/xenon/tools/schrodinger2025-2}"
+
+# ── Auto-detect Schrödinger installation ──
+SCHRODINGER="${SCHRODINGER:-}"
+find_schrodinger() {
+    if [[ -n "$SCHRODINGER" ]] && [[ -f "$SCHRODINGER/run" ]]; then
+        return 0
+    fi
+    local search_paths=(
+        /opt/schrodinger*
+        /home/$USER/schrodinger*
+        /home/$USER/tools/schrodinger*
+        /usr/local/schrodinger*
+        /shared/schrodinger*
+    )
+    for pattern in "${search_paths[@]}"; do
+        for dir in $pattern; do
+            if [[ -d "$dir" ]] && [[ -f "$dir/run" ]]; then
+                SCHRODINGER="$dir"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+if ! find_schrodinger; then
+    echo -e "\033[0;31m[ERROR]\033[0m Cannot find Schrödinger installation."
+    echo "    Set SCHRODINGER env var or install in /opt/ or ~/tools/"
+    exit 1
+fi
 OUTPUT_DIR=""
 
 usage() {
