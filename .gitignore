@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test data (large trajectory files)
+*_trj/
+*_trj.tar.gz
+*.ene
+*.log
+*.cfg
+*.cms
+*.mae
+*.maegz
+*-out.cms
+
+# Analysis outputs (reproducible)
+analysis/
+*/analysis/
+figures/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Schrödinger license noise
+.license*
+*.lic
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
