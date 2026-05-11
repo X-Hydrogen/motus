@@ -619,6 +619,225 @@ def plot_rdf(analysis_dir, outdir):
         print(f'    ✓ rdf_water.pdf + rdf_water.png')
 
 
+def plot_density(analysis_dir, outdir):
+    """Plot 1D density profiles and 2D density heatmaps."""
+    density_files = sorted(Path(analysis_dir).glob('density_*.csv'))
+    if not density_files:
+        return
+
+    # Separate 1D and 2D
+    files_1d = []  # (name, data)
+    files_2d = []
+
+    for f in density_files:
+        fname = Path(f).stem.replace('density_', '')
+        if '2d' not in fname:
+            data = read_csv(str(f))
+            if data:
+                files_1d.append((fname, data))
+        else:
+            files_2d.append((fname, f))
+
+    # ── 1D density profiles ──
+    if files_1d:
+        # Group by selection
+        sel_groups = defaultdict(list)
+        for name, d in files_1d:
+            # name format: 1d_water_X, 1d_solute_Y, etc.
+            parts = name.split('_')
+            sel_name = parts[1] if len(parts) >= 2 else 'unknown'
+            axis = parts[-1] if parts[-1] in ('X', 'Y', 'Z') else '?'
+            sel_groups[sel_name].append((axis, d, name))
+
+        for sel_name, items in sel_groups.items():
+            fig, axes = plt.subplots(len(items), 1, figsize=(8, 2.2 * len(items)),
+                                     squeeze=False)
+            fig.suptitle(f'Density Profile — {sel_name}', fontsize=12, fontweight='bold')
+
+            for idx, (axis, d, name) in enumerate(sorted(items)):
+                ax = axes[idx][0]
+                x_key = [k for k in d.keys() if 'A' in k or 'axis' in k.lower()][0]
+                y_key = [k for k in d.keys() if 'density' in k.lower() or 'relative' in k.lower()][0]
+                ax.plot(d[x_key], d[y_key], color=PALETTE['blue'], linewidth=1.0)
+                ax.fill_between(d[x_key], d[y_key], alpha=0.15, color=PALETTE['blue'])
+                ax.axhline(y=1.0, color='grey', linestyle='--', linewidth=0.5, label='Bulk (1.0)')
+                ax.set_xlabel(f'{axis} (Å)', fontsize=8)
+                ax.set_ylabel('Rel. Density', fontsize=8)
+                ax.tick_params(labelsize=7)
+                ax.legend(fontsize=7, loc='upper right')
+
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            save_figure(fig, outdir, f'density_1d_{sel_name}')
+            plt.close(fig)
+
+        print('  ── Density: 1D Profiles ──')
+
+    # ── 2D density heatmaps ──
+    if files_2d:
+        for fname, fpath in files_2d:
+            with open(str(fpath)) as fh:
+                first_line = fh.readline()
+            hist = np.loadtxt(str(fpath), delimiter=',', skiprows=1)
+            sel_plane = fname.replace('2d_', '')
+
+            fig, ax = plt.subplots(figsize=(6, 5))
+            im = ax.imshow(hist.T, origin='lower', aspect='auto', cmap='YlOrRd',
+                           interpolation='bilinear')
+            plt.colorbar(im, ax=ax, label='Rel. Density', shrink=0.85)
+            ax.set_xlabel(f'{sel_plane.split("_")[-1][0]} (bin)', fontsize=9)
+            ax.set_ylabel(f'{sel_plane.split("_")[-1][1]} (bin)', fontsize=9)
+            ax.set_title(f'2D Density Map — {sel_plane}', fontsize=11)
+            plt.tight_layout()
+            save_figure(fig, outdir, f'density_{fname}')
+            plt.close(fig)
+
+        print('  ── Density: 2D Maps ──')
+
+
+def plot_rg(analysis_dir, outdir):
+    """Plot radius of gyration over time."""
+    rg_files = sorted(Path(analysis_dir).glob('rg_*.csv'))
+    if not rg_files:
+        return
+
+    for f in rg_files:
+        data = read_csv(str(f))
+        if not data:
+            continue
+        mol_name = Path(f).stem.replace('rg_', '')
+
+        t, tlabel = convert_time_to_ns(data['Time_ps'])
+        rg = data['Rg_A']
+
+        fig, ax = plt.subplots(figsize=(7, 3.5))
+        ax.plot(t, rg, color=PALETTE['blue'], linewidth=1.0)
+        if 'Rg_std_A' in data:
+            ax.fill_between(t, rg - data['Rg_std_A'], rg + data['Rg_std_A'],
+                            alpha=0.15, color=PALETTE['blue'])
+
+        ax.axhline(y=np.mean(rg), color=PALETTE['red'], linestyle='--', linewidth=0.6,
+                   label=f'Mean: {np.mean(rg):.2f} Å')
+        ax.set_xlabel(tlabel, fontsize=9)
+        ax.set_ylabel('Rg (Å)', fontsize=9)
+        ax.set_title(f'Radius of Gyration — {mol_name}', fontsize=11)
+        ax.legend(fontsize=8)
+        ax.tick_params(labelsize=8)
+        plt.tight_layout()
+        save_figure(fig, outdir, f'rg_{mol_name}')
+        plt.close(fig)
+
+    print('  ── Radius of Gyration ──')
+
+
+def plot_distance(analysis_dir, outdir):
+    """Plot monitored atom-pair distances over time."""
+    dist_files = sorted(Path(analysis_dir).glob('distance_*.csv'))
+    if not dist_files:
+        return
+
+    if len(dist_files) <= 4:
+        # Single panel per distance
+        for f in dist_files:
+            data = read_csv(str(f))
+            if not data:
+                continue
+            name = Path(f).stem.replace('distance_', '').replace('_', '-')
+            t, tlabel = convert_time_to_ns(data['Time_ps'])
+            d = data['Distance_A']
+
+            fig, ax = plt.subplots(figsize=(7, 3.5))
+            ax.plot(t, d, color=PALETTE['blue'], linewidth=1.0)
+            ax.axhline(y=np.mean(d), color=PALETTE['red'], linestyle='--', linewidth=0.6,
+                       label=f'Mean: {np.mean(d):.2f} Å')
+            ax.set_xlabel(tlabel, fontsize=9)
+            ax.set_ylabel('Distance (Å)', fontsize=9)
+            ax.set_title(f'Distance — {name}', fontsize=11)
+            ax.legend(fontsize=8)
+            ax.tick_params(labelsize=8)
+            plt.tight_layout()
+            save_figure(fig, outdir, f'distance_{Path(f).stem}')
+            plt.close(fig)
+    else:
+        # Multi-panel overview
+        n = len(dist_files)
+        n_cols = min(2, n)
+        n_rows = int(np.ceil(n / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 2.5),
+                                  squeeze=False)
+        fig.suptitle('Monitored Distances', fontsize=12, fontweight='bold')
+        for idx, f in enumerate(dist_files):
+            ax = axes[idx // n_cols][idx % n_cols]
+            data = read_csv(str(f))
+            if not data:
+                continue
+            name = Path(f).stem.replace('distance_', '').replace('_', '-')
+            t, tlabel = convert_time_to_ns(data['Time_ps'])
+            ax.plot(t, data['Distance_A'], color=PALETTE['blue'], linewidth=0.8)
+            ax.set_xlabel(tlabel, fontsize=7)
+            ax.set_ylabel('Å', fontsize=7)
+            ax.set_title(name, fontsize=8)
+            ax.tick_params(labelsize=6)
+        for i in range(n, n_rows * n_cols):
+            axes[i // n_cols][i % n_cols].set_visible(False)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        save_figure(fig, outdir, 'distance_overview')
+        plt.close(fig)
+
+    print('  ── Distance Monitoring ──')
+
+
+def plot_water_residence(analysis_dir, outdir):
+    """Plot water residence time survival curve and shell occupancy."""
+    surv_file = Path(analysis_dir) / 'water_residence_survival.csv'
+    occ_file = Path(analysis_dir) / 'water_residence_occupancy.csv'
+
+    if not surv_file.exists():
+        return
+
+    data_s = read_csv(str(surv_file))
+    if not data_s:
+        return
+
+    t = data_s['Time_ps']
+    s = data_s['Survival_Probability']
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+
+    # Survival curve
+    ax1.plot(t, s, color=PALETTE['blue'], linewidth=1.5)
+    ax1.axhline(y=1.0/np.e, color='grey', linestyle=':', linewidth=0.6, label='1/e')
+    # Find τ
+    tau_idx = np.argmin(np.abs(s - 1.0/np.e))
+    if tau_idx < len(t):
+        ax1.axvline(x=t[tau_idx], color=PALETTE['red'], linestyle='--', linewidth=0.8,
+                    label=f'τ = {t[tau_idx]:.1f} ps')
+    ax1.set_xlabel('Time (ps)', fontsize=9)
+    ax1.set_ylabel('Survival Probability S(t)', fontsize=9)
+    ax1.set_title('Water Residence Survival', fontsize=11)
+    ax1.legend(fontsize=8)
+    ax1.tick_params(labelsize=8)
+
+    # Shell occupancy
+    if occ_file.exists():
+        data_o = read_csv(str(occ_file))
+        if data_o:
+            t_o = data_o['Time_ps']
+            count = data_o['Shell_Water_Count']
+            ax2.plot(t_o, count, color=PALETTE['green'], linewidth=0.8)
+            ax2.axhline(y=count.mean(), color=PALETTE['red'], linestyle='--', linewidth=0.6,
+                        label=f'Mean: {count.mean():.1f}')
+            ax2.set_xlabel('Time (ps)', fontsize=9)
+            ax2.set_ylabel('Shell Water Count', fontsize=9)
+            ax2.set_title('Shell Occupancy', fontsize=11)
+            ax2.legend(fontsize=8)
+            ax2.tick_params(labelsize=8)
+
+    plt.tight_layout()
+    save_figure(fig, outdir, 'water_residence')
+    plt.close(fig)
+    print('  ── Water Residence Time ──')
+
+
 # ═══════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════
@@ -626,7 +845,7 @@ def plot_rdf(analysis_dir, outdir):
 def main():
     parser = argparse.ArgumentParser(description='Desmond MD publication-quality plotting')
     parser.add_argument('analysis_dir', help='Path to analysis directory (with CSV files)')
-    parser.add_argument('--type', choices=['energy', 'hbonds', 'water_shells', 'contacts', 'rmsd', 'rmsf', 'rdf', 'dashboard', 'all'],
+    parser.add_argument('--type', choices=['energy', 'hbonds', 'water_shells', 'contacts', 'rmsd', 'rmsf', 'rdf', 'density', 'rg', 'distance', 'water_res', 'dashboard', 'all'],
                         default='all', help='Plot type')
     parser.add_argument('--dpi', type=int, default=300, help='Output DPI (default: 300)')
     args = parser.parse_args()
@@ -690,6 +909,33 @@ def main():
         if rdf_files:
             print('── Radial Distribution Functions ──')
             plot_rdf(analysis_dir, outdir)
+
+    # Density cross-sections
+    if plot_type in ('density', 'all'):
+        density_files = list(Path(analysis_dir).glob('density_*.csv'))
+        if density_files:
+            print('── Density Cross-Sections ──')
+            plot_density(analysis_dir, outdir)
+
+    # Radius of gyration
+    if plot_type in ('rg', 'all'):
+        rg_files = list(Path(analysis_dir).glob('rg_*.csv'))
+        if rg_files:
+            print('── Radius of Gyration ──')
+            plot_rg(analysis_dir, outdir)
+
+    # Distance monitoring
+    if plot_type in ('distance', 'all'):
+        dist_files = list(Path(analysis_dir).glob('distance_*.csv'))
+        if dist_files:
+            print('── Distance Monitoring ──')
+            plot_distance(analysis_dir, outdir)
+
+    # Water residence time
+    if plot_type in ('water_res', 'all'):
+        if (Path(analysis_dir) / 'water_residence_survival.csv').exists():
+            print('── Water Residence Time ──')
+            plot_water_residence(analysis_dir, outdir)
 
     # Summary dashboard
     if plot_type in ('dashboard', 'all'):

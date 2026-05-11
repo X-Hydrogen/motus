@@ -8,7 +8,7 @@
 # Options:
 #   --plot              Full analysis + generate publication figures (PDF+PNG)
 #   --fig-only          Skip analysis, ONLY re-plot from existing CSV data
-#   --plot-type <type>  Plot type: energy|hbonds|water_shells|contacts|rmsd|rmsf|dashboard|all
+#   --plot-type <type>  Plot type: energy|hbonds|water_shells|rdf|density|rg|distance|water_res|dashboard|all
 #
 # The folder must contain:
 #   -out.cms (final structure), _trj/ (trajectory), .ene (energy), .log (log)
@@ -617,10 +617,148 @@ fi
 report_sep
 
 # ============================================================
-# ANALYSIS 8: Publication-quality Plotting (if --plot)
+# ANALYSIS 8: Density Cross-Section Analysis
+# ============================================================
+header "8. Density Cross-Section Analysis"
+cd "$ANADIR"
+
+DENSITY_SCRIPT="$SCRIPT_DIR/density_gen.py"
+if [[ -f "$DENSITY_SCRIPT" ]]; then
+    log "Computing 1D + 2D density profiles (water, solute, all)..."
+    DENSITY_OUT=$($RUN_SCHROD python3 "$DENSITY_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --bins 80 --stride 10 --max-frames 400 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$DENSITY_OUT" | grep '✓' | while IFS= read -r line; do
+            log "  $line"
+        done
+        NDENS=$(find "$ANADIR" -maxdepth 1 -name "density_*.csv" 2>/dev/null | wc -l)
+        log "  Generated $NDENS density CSV files"
+        if [[ $NDENS -gt 0 ]]; then
+            log "  → Generating density figures..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type density 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Density Cross-Section ──"
+        report "  CSV files: $NDENS"
+    else
+        warn "Density computation failed (non-critical)"
+    fi
+else
+    skip "Density analysis (density_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 9: Radius of Gyration (Rg)
+# ============================================================
+header "9. Radius of Gyration"
+cd "$ANADIR"
+
+RG_SCRIPT="$SCRIPT_DIR/rg_gen.py"
+if [[ -f "$RG_SCRIPT" ]]; then
+    log "Computing radius of gyration for solute molecules..."
+    RG_OUT=$($RUN_SCHROD python3 "$RG_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --stride 10 --max-frames 400 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$RG_OUT" | grep '✓' | while IFS= read -r line; do
+            log "  $line"
+        done
+        NRG=$(find "$ANADIR" -maxdepth 1 -name "rg_*.csv" 2>/dev/null | wc -l)
+        log "  Generated $NRG Rg CSV file(s)"
+        if [[ $NRG -gt 0 ]]; then
+            log "  → Generating Rg figures..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type rg 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Radius of Gyration ──"
+        report "  Rg files: $NRG"
+    else
+        warn "Rg computation failed (non-critical)"
+    fi
+else
+    skip "Rg analysis (rg_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 10: Distance Monitoring
+# ============================================================
+header "10. Distance Monitoring"
+cd "$ANADIR"
+
+DIST_SCRIPT="$SCRIPT_DIR/dist_gen.py"
+if [[ -f "$DIST_SCRIPT" ]]; then
+    log "Auto-detecting key inter-molecular distances..."
+    DIST_OUT=$($RUN_SCHROD python3 "$DIST_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --auto --stride 10 --max-frames 400 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$DIST_OUT" | grep '✓' | while IFS= read -r line; do
+            log "  $line"
+        done
+        NDIST=$(find "$ANADIR" -maxdepth 1 -name "distance_*.csv" 2>/dev/null | wc -l)
+        log "  Monitored $NDIST distance pairs"
+        if [[ $NDIST -gt 0 ]]; then
+            log "  → Generating distance figure..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type distance 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Distance Monitoring ──"
+        report "  Pairs monitored: $NDIST"
+    else
+        warn "Distance monitoring failed (non-critical)"
+    fi
+else
+    skip "Distance monitoring (dist_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 11: Water Residence Time
+# ============================================================
+header "11. Water Residence Time"
+cd "$ANADIR"
+
+WATERRES_SCRIPT="$SCRIPT_DIR/water_res_gen.py"
+if [[ -f "$WATERRES_SCRIPT" ]]; then
+    log "Computing water residence time in first solvation shell..."
+    WATERRES_OUT=$($RUN_SCHROD python3 "$WATERRES_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --cutoff 3.5 --stride 10 --max-frames 400 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$WATERRES_OUT" | grep '✓\|Results\|Residence\|Avg\|Exchange' | while IFS= read -r line; do
+            log "  $line"
+        done
+        if [[ -f "$ANADIR/water_residence_survival.csv" ]]; then
+            log "  → Generating residence time figure..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type water_res 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Water Residence Time ──"
+        report "  See water_residence_survival.csv"
+    else
+        warn "Water residence computation failed (non-critical)"
+    fi
+else
+    skip "Water residence (water_res_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 12: Publication-quality Plotting (if --plot)
 # ============================================================
 if [[ "$DO_PLOT" -eq 1 ]]; then
-    header "8. Generating Publication Figures"
+    header "12. Generating Publication Figures"
     cd "$ANADIR"
 
     PLOT_SCRIPT="$SCRIPT_DIR/desmond_plot.py"
