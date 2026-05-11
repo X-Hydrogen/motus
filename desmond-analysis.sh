@@ -8,7 +8,7 @@
 # Options:
 #   --plot              Full analysis + generate publication figures (PDF+PNG)
 #   --fig-only          Skip analysis, ONLY re-plot from existing CSV data
-#   --plot-type <type>  Plot type: energy|hbonds|water_shells|rdf|density|rg|distance|water_res|dashboard|all
+#   --plot-type <type>  Plot type: energy|hbonds|water_shells|rdf|density|rg|distance|water_res|dipole|freevol|cluster|dashboard|all
 #
 # The folder must contain:
 #   -out.cms (final structure), _trj/ (trajectory), .ene (energy), .log (log)
@@ -755,10 +755,111 @@ fi
 report_sep
 
 # ============================================================
-# ANALYSIS 12: Publication-quality Plotting (if --plot)
+# ANALYSIS 12: Conformational Clustering + PCA
+# ============================================================
+header "12. Conformational Clustering"
+cd "$ANADIR"
+
+CLUSTER_SCRIPT="$SCRIPT_DIR/cluster_gen.py"
+if [[ -f "$CLUSTER_SCRIPT" ]]; then
+    log "Performing hierarchical RMSD clustering + PCA projection..."
+    CLUSTER_OUT=$($RUN_SCHROD python3 "$CLUSTER_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --n-clusters 5 --stride 10 --max-frames 300 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$CLUSTER_OUT" | grep -E '✓|Cluster [0-9]|PC1=' | while IFS= read -r line; do
+            log "  $line"
+        done
+        if [[ -f "$ANADIR/cluster_assignments.csv" ]]; then
+            log "  → Generating clustering figures..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type cluster 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Conformational Clustering ──"
+        report "  See cluster_assignments.csv + cluster_pca.csv"
+    else
+        warn "Clustering failed (non-critical)"
+    fi
+else
+    skip "Clustering (cluster_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 13: Dipole Moment
+# ============================================================
+header "13. Molecular Dipole Moment"
+cd "$ANADIR"
+
+DIPOLE_SCRIPT="$SCRIPT_DIR/dipole_gen.py"
+if [[ -f "$DIPOLE_SCRIPT" ]]; then
+    log "Computing molecular dipole moments..."
+    DIPOLE_OUT=$($RUN_SCHROD python3 "$DIPOLE_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --stride 10 --max-frames 400 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$DIPOLE_OUT" | grep -E '✓|Total dipole|Solute molecules' | while IFS= read -r line; do
+            log "  $line"
+        done
+        NDIPOLE=$(find "$ANADIR" -maxdepth 1 -name "dipole_*.csv" 2>/dev/null | wc -l)
+        log "  Generated $NDIPOLE dipole CSV file(s)"
+        if [[ $NDIPOLE -gt 0 ]]; then
+            log "  → Generating dipole figures..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type dipole 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Dipole Moment ──"
+        report "  CSV files: $NDIPOLE"
+    else
+        warn "Dipole computation failed (non-critical)"
+    fi
+else
+    skip "Dipole analysis (dipole_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 14: Free Volume
+# ============================================================
+header "14. Free Volume Analysis"
+cd "$ANADIR"
+
+FREEVOL_SCRIPT="$SCRIPT_DIR/freevol_gen.py"
+if [[ -f "$FREEVOL_SCRIPT" ]]; then
+    log "Computing free volume / void space..."
+    FREEVOL_OUT=$($RUN_SCHROD python3 "$FREEVOL_SCRIPT" \
+        "$CMS" "$TRJ" "$ANADIR" \
+        --stride 50 --max-frames 40 --probe 1.4 --grid 1.0 2>&1)
+    if [[ $? -eq 0 ]]; then
+        echo "$FREEVOL_OUT" | grep -E '✓|Free volume|FFV' | while IFS= read -r line; do
+            log "  $line"
+        done
+        if [[ -f "$ANADIR/free_volume.csv" ]]; then
+            log "  → Generating free volume figure..."
+            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type freevol 2>&1 | \
+                grep '✓\|──' | while IFS= read -r line; do
+                log "    $line"
+            done
+        fi
+        report "── Free Volume ──"
+        report "  See free_volume.csv"
+    else
+        warn "Free volume computation failed (non-critical)"
+    fi
+else
+    skip "Free volume (freevol_gen.py not found)"
+fi
+report_sep
+
+# ============================================================
+# ANALYSIS 15: Publication-quality Plotting (if --plot)
 # ============================================================
 if [[ "$DO_PLOT" -eq 1 ]]; then
-    header "12. Generating Publication Figures"
+    header "15. Generating Publication Figures"
     cd "$ANADIR"
 
     PLOT_SCRIPT="$SCRIPT_DIR/desmond_plot.py"
