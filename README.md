@@ -139,7 +139,7 @@ Fully automated SIMA — **no Maestro GUI needed**. Generates `.dat` files direc
 Hierarchical RMSD clustering + PCA projection. **Convex hulls**, cluster centroids, and time-evolution coloring — the kind of scatter plot you see in ML papers.
 
 <p align="center">
-  <img src="docs/images/sima_torsion_heatmap_L_Torsions.png" alt="PCA Scatter" width="650">
+  <img src="docs/images/cluster_pca_scatter.png" alt="PCA Scatter" width="650">
 </p>
 
 ---
