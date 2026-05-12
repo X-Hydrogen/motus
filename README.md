@@ -122,7 +122,7 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 
 ## Figure Gallery
 
-All figures below were generated **fully automatically** by MOTUS from a single Desmond MD trajectory of a urea + phosphate aqueous solution. Click any engine name for the complete per-engine gallery with detailed figure descriptions.
+All figures below were generated **fully automatically** by MOTUS from a single Desmond MD trajectory of a urea + phosphate aqueous solution. Click any engine name for the complete per-engine gallery with detailed descriptions.
 
 | Engine | Gallery | Figures |
 |--------|---------|---------|
@@ -132,76 +132,158 @@ All figures below were generated **fully automatically** by MOTUS from a single 
 
 ---
 
-### Conformational Landscape — PCA Projection with Convex Hulls
+### 1. Energy & Thermodynamics
 
-Hierarchical RMSD clustering + PCA projection. Each cluster gets a **convex hull outline** and a **diamond centroid marker**. Point size grows with simulation time — small dots = early frames, large = late. Legend placed outside the plot frame.
-
-<p align="center">
-  <img src="docs/images/desmond/cluster_pca_scatter.png" alt="PCA Scatter" width="650">
-</p>
-
----
-
-### Thermodynamic Monitoring — Energy & Ensemble Stability
-
-Multi-panel time series: Temperature (K), Pressure (bar), Potential Energy (kcal/mol), Volume (Å³). Dashed lines mark ensemble averages. Validates thermostat/barostat convergence at a glance.
+Before analyzing structure, verify the simulation is stable. These plots confirm the thermostat and barostat have converged — temperature, pressure, potential energy, and volume fluctuate around equilibrium values without drift.
 
 <p align="center">
   <img src="docs/images/desmond/energy_timeseries.png" alt="Energy Timeseries" width="650">
 </p>
-
----
-
-### Solvent Structure — Water Shell Classification & RDF
-
-**Left:** Three-layer water classification — bound (<3.5 Å), 2nd shell (3.5–5 Å), free (>5 Å) — as stacked area chart + pie chart. **Right:** Radial distribution function g(r) with coordination number n(r) on dual Y-axes for every element pair.
-
 <p align="center">
-  <img src="docs/images/desmond/water_shells.png" alt="Water Shells" width="400">
-  <img src="docs/images/desmond/rdf_elements.png" alt="Element-Pair RDF" width="400">
+  <img src="docs/images/desmond/energy_distribution.png" alt="Energy Distribution" width="650">
 </p>
 
 ---
 
-### Molecular Properties — Dipole, Free Volume, and Ligand Behavior
+### 2. Hydrogen Bonds & Solvation Shells
 
-**Left:** Total dipole moment components (X/Y/Z) over time — reveals charge redistribution and polarization dynamics. **Right:** SIMA ligand properties dashboard — RMSD, SASA, PSA, MolSA, and intramolecular H-bonds with ±1σ bands.
+Hydrogen bonds are the primary interaction governing solvation, molecular recognition, and interfacial structure. MOTUS tracks total and solute-specific H-bond counts, classifies water into bound / 2nd-shell / free populations, measures water residence time, and monitors solute–water contacts.
 
 <p align="center">
-  <img src="docs/images/desmond/dipole_components.png" alt="Dipole Components" width="400">
-  <img src="docs/images/desmond/sima_properties_L-Properties.png" alt="SIMA Properties" width="400">
+  <img src="docs/images/desmond/hbonds(all).png" alt="Hbonds All" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/hbonds(solute).png" alt="Hbonds Solute" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/water_shells.png" alt="Water Shells" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/solute_water_contacts.png" alt="Solute-Water Contacts" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/water_residence.png" alt="Water Residence" width="650">
 </p>
 
 ---
 
-### Density Mapping — 1D Profiles & 2D Cross-Sections
+### 3. Radial Distribution Functions — g(r) + Coordination Number n(r)
 
-**Left:** 1D relative density profiles along X/Y/Z axes — flat profiles confirm well-equilibrated homogeneous systems. **Right:** 2D density heatmap in the XY plane — identifies anisotropic packing, phase separation, or interfacial structure.
+RDF reveals the short- and medium-range order of liquids. Every element-pair g(r) is computed, with coordination number n(r) on a dual Y-axis (dashed red). Water-shell RDFs distinguish bound vs free water populations around the solute.
 
 <p align="center">
-  <img src="docs/images/desmond/density_1d_all.png" alt="1D Density" width="400">
-  <img src="docs/images/desmond/density_2d_all_XY.png" alt="2D Density XY" width="400">
+  <img src="docs/images/desmond/rdf_elements.png" alt="Element-Pair RDF" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/rdf_water.png" alt="Water Shell RDF" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/rdf_molecule_C1_H4_N2_O1.png" alt="Molecular RDF" width="650">
 </p>
 
 ---
 
-### Cluster Populations & Timeline
+### 4. Density Cross-Sections — 1D Profiles & 2D Heatmaps
 
-**Left:** Bar + pie chart of RMSD-based conformational cluster populations. **Right:** Stacked color bands showing which conformational state the system occupies at each point in time — transitions appear as band boundaries.
+Density maps expose anisotropic packing, interfacial layering, or phase separation invisible in isotropic averages. 1D profiles along X/Y/Z validate homogeneity; 2D heatmaps reveal lateral structure.
 
 <p align="center">
-  <img src="docs/images/desmond/cluster_population.png" alt="Cluster Population" width="400">
-  <img src="docs/images/desmond/cluster_timeline.png" alt="Cluster Timeline" width="400">
+  <img src="docs/images/desmond/density_1d_all.png" alt="1D Density All" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/density_1d_solute.png" alt="1D Density Solute" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/density_1d_water.png" alt="1D Density Water" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/density_2d_all_XY.png" alt="2D Density XY" width="550">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/density_2d_all_XZ.png" alt="2D Density XZ" width="550">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/density_2d_all_YZ.png" alt="2D Density YZ" width="550">
 </p>
 
 ---
 
-### Free Volume & Void Analysis
+### 5. Molecular Properties — Rg, Distances, Dipole Moments
 
-Free volume (Å³) probed by a rolling sphere + fractional free volume (FFV %). Essential for predicting gas permeability, ion conductivity, and mechanical properties of polymers and electrolytes.
+Per-molecule characterization: radius of gyration (compactness), key interatomic distances (bond formation/breaking), total dipole magnitude and vector components (polarization dynamics).
+
+<p align="center">
+  <img src="docs/images/desmond/rg_C1_H4_N2_O1.png" alt="Radius of Gyration" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/distance_overview.png" alt="Distance Overview" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/dipole_total.png" alt="Dipole Total" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/dipole_components.png" alt="Dipole Components" width="650">
+</p>
+
+---
+
+### 6. SIMA — Simulation Interactions Diagram
+
+Fully automated SIMA — no Maestro GUI needed. Torsion radar plots show rotatable bond dynamics via time-colored angular distributions. Ligand properties dashboard tracks RMSD, SASA, PSA, MolSA, and intramolecular H-bonds. Torsion heatmaps reveal coupled conformational preferences.
+
+<p align="center">
+  <img src="docs/images/desmond/sima_radial_L_Torsions_1.png" alt="SIMA Radial Torsion 1" width="500">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/sima_radial_L_Torsions_2.png" alt="SIMA Radial Torsion 2" width="500">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/sima_properties_L-Properties.png" alt="SIMA Properties" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/sima_torsion_heatmap_L_Torsions.png" alt="SIMA Torsion Heatmap" width="550">
+</p>
+
+---
+
+### 7. Conformational Clustering & PCA
+
+Hierarchical RMSD clustering groups trajectory frames into conformational states. The RMSD matrix heatmap visualizes pairwise structural similarity. Cluster populations (bar + pie) quantify state occupancy; the timeline shows state transitions. PCA projection onto PC1–PC2 with **convex hulls** and **diamond centroids** maps the conformational landscape. Time-colored variant reveals chronological drift.
+
+<p align="center">
+  <img src="docs/images/desmond/cluster_rmsd_matrix.png" alt="RMSD Matrix" width="550">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/cluster_population.png" alt="Cluster Population" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/cluster_timeline.png" alt="Cluster Timeline" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/cluster_pca_scatter.png" alt="PCA Cluster Scatter" width="650">
+</p>
+<p align="center">
+  <img src="docs/images/desmond/cluster_pca_timeline.png" alt="PCA Time Evolution" width="650">
+</p>
+
+---
+
+### 8. Free Volume & Void Analysis
+
+Free volume (Å³) probed by a rolling sphere + fractional free volume (FFV %). Critical for predicting gas permeability, ion conductivity, and mechanical properties in polymers, electrolytes, and porous materials.
 
 <p align="center">
   <img src="docs/images/desmond/free_volume.png" alt="Free Volume" width="650">
+</p>
+
+---
+
+### 9. Summary Dashboard
+
+All key metrics at a glance — temperature, energy distribution, H-bonds, and water shell populations in a 2×2 panel. Perfect for supplementary information in publications.
+
+<p align="center">
+  <img src="docs/images/desmond/summary_dashboard.png" alt="Summary Dashboard" width="650">
 </p>
 
 ---

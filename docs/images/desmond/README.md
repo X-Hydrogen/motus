@@ -23,6 +23,7 @@ All figures generated from a **urea + H₂PO₄⁻ / NH₄⁺ aqueous solution**
 | Figure | Analysis | What It Shows |
 |--------|----------|---------------|
 | `water_shells.png` | Water Shell Classification | Dual panel: **(left)** stacked area of water classified as Bound (<3.5 Å), 2nd shell (3.5–5 Å), and Free (>5 Å) over time; **(right)** average pie chart. |
+| `solute_water_contacts.png` | Solute–Water Contacts | Number of water molecules within contact distance of solute atoms over time. Sensitive to solvation/desolvation events. |
 | `water_residence.png` | Water Residence Time | Survival probability S(t) for water in the first solvation shell. Exponential decay fit yields residence time τ. |
 
 ## Radial Distribution Functions
@@ -30,14 +31,19 @@ All figures generated from a **urea + H₂PO₄⁻ / NH₄⁺ aqueous solution**
 | Figure | Analysis | What It Shows |
 |--------|----------|---------------|
 | `rdf_elements.png` | Element-Pair RDF | g(r) + coordination number n(r) for **every element pair** in the system. Dual Y-axis: left = g(r) (solid), right = n(r) (dashed). |
+| `rdf_molecule_C1_H4_N2_O1.png` | Molecular RDF (Intra/Inter) | Intra- and intermolecular g(r) + n(r) for a specific molecule. Separates internal structure from packing. |
 | `rdf_water.png` | Water Shell RDF | g(r) for bound/free water vs solute and water-water pairs. First peak position = characteristic solvation distance. |
 
 ## Density Profiles
 
 | Figure | Analysis | What It Shows |
 |--------|----------|---------------|
-| `density_1d_all.png` | 1D Density Profile | Relative density along X, Y, Z axes. Flat profile (near 1.0) = well-equilibrated homogeneous system. |
-| `density_2d_all_XY.png` | 2D Density Map (XY) | Cross-sectional density heatmap in the XY plane. Identifies anisotropic packing or phase separation. |
+| `density_1d_all.png` | 1D Density (All Atoms) | Relative density along X, Y, Z axes. Flat profile (near 1.0) = well-equilibrated homogeneous system. |
+| `density_1d_solute.png` | 1D Density (Solute) | Solute density profile along axes. Peaks reveal preferred solute positions or interfacial accumulation. |
+| `density_1d_water.png` | 1D Density (Water) | Water density profile. Layering near interfaces manifests as oscillations. |
+| `density_2d_all_XY.png` | 2D Density Map (XY) | Cross-sectional density heatmap in the XY plane. |
+| `density_2d_all_XZ.png` | 2D Density Map (XZ) | Cross-sectional density heatmap in the XZ plane. |
+| `density_2d_all_YZ.png` | 2D Density Map (YZ) | Cross-sectional density heatmap in the YZ plane. |
 
 ## Molecular Properties
 
@@ -47,22 +53,29 @@ All figures generated from a **urea + H₂PO₄⁻ / NH₄⁺ aqueous solution**
 | `distance_overview.png` | Distance Monitoring | User-specified atom-pair distances over time. Useful for tracking bond formation/breaking or key contacts. |
 | `dipole_total.png` | Total Dipole Moment | System total dipole magnitude over time. Polarization changes indicate charge redistribution. |
 | `dipole_components.png` | Dipole Components | X/Y/Z vector components of the total dipole. Oscillations reveal anisotropic polarization. |
-| `free_volume.png` | Free Volume Analysis | Dual panel: **(left)** free volume (Å³) excluded by probe sphere; **(right)** fractional free volume (FFV %). Void analysis for transport properties. |
 
 ## Conformational Clustering (ML-Style)
 
 | Figure | Analysis | What It Shows |
 |--------|----------|---------------|
+| `cluster_rmsd_matrix.png` | Pairwise RMSD Matrix | Heatmap of all-vs-all frame RMSD. Block-diagonal structure = well-separated clusters. |
 | `cluster_population.png` | Cluster Populations | Bar chart + pie chart of RMSD-based conformational clusters. Largest cluster = dominant conformation. |
 | `cluster_timeline.png` | Cluster Timeline | Stacked color bands showing which cluster each frame belongs to. Transitions visible as band boundaries. |
 | `cluster_pca_scatter.png` | PCA Projection (Clusters) | PC1 vs PC2 scatter colored by cluster. **Convex hulls** enclose each cluster. **Diamond markers** = cluster centroids. Dot size increases with simulation time. |
 | `cluster_pca_timeline.png` | PCA Projection (Time) | Same projection colored by time (viridis gradient). Reveals conformational drift — distinct color regions = distinct simulation epochs. |
 
+## Free Volume
+
+| Figure | Analysis | What It Shows |
+|--------|----------|---------------|
+| `free_volume.png` | Free Volume Analysis | Dual panel: **(left)** free volume (Å³) excluded by probe sphere; **(right)** fractional free volume (FFV %). Void analysis for transport properties. |
+
 ## SIMA (Simulation Interactions Diagram)
 
 | Figure | Analysis | What It Shows |
 |--------|----------|---------------|
-| `sima_radial_L_Torsions_1.png` | Ligand Torsion Radar | Time-colored radial plot of a rotatable torsion angle. Color gradient = early (purple) → late (yellow). Wide angular spread = flexible torsion. |
+| `sima_radial_L_Torsions_1.png` | Ligand Torsion Radar 1 | Time-colored radial plot of a rotatable torsion angle. Color gradient = early (purple) → late (yellow). Wide angular spread = flexible torsion. |
+| `sima_radial_L_Torsions_2.png` | Ligand Torsion Radar 2 | Second rotatable torsion. Narrow angular spread = rigid torsion. |
 | `sima_properties_L-Properties.png` | Ligand Properties | Multi-panel: RMSD, SASA, PSA, MolSA, intramolecular H-bonds. All as rolling averages with ±1σ bands. |
 | `sima_torsion_heatmap_L_Torsions.png` | Torsion Heatmap | 2D probability density of torsion pairs. Hot spots = preferred conformations. Diagonal = correlated torsions. |
 
