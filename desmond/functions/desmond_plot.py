@@ -1134,6 +1134,132 @@ def plot_cluster(analysis_dir, outdir):
         print('  ── Conformational Clustering ──')
 
 
+def plot_meta(analysis_dir, outdir):
+    """Plot metadynamics results: CV timeseries, height, and FES."""
+    
+    # --- CV Time Series ---
+    cv_csv = os.path.join(analysis_dir, 'meta_cv_time.csv')
+    if not os.path.exists(cv_csv):
+        print('  ⚠ No meta_cv_time.csv found')
+        return
+    
+    data = read_csv(cv_csv)
+    if not data:
+        return
+    
+    cv_cols = sorted([k for k in data if k.startswith('CV_')])
+    t_raw = data['Time_ps']
+    t_label = 'Time (ps)' if t_raw[-1] < 5000 else 'Time (ns)'
+    t = t_raw / 1000 if t_raw[-1] > 5000 else t_raw
+    
+    n_cv = len(cv_cols)
+    
+    # Figure 1: CV time evolution
+    fig, axes = plt.subplots(n_cv, 1, figsize=(8, 2.5 * n_cv), sharex=True)
+    if n_cv == 1:
+        axes = [axes]
+    
+    for i, cvk in enumerate(cv_cols):
+        ax = axes[i]
+        ax.plot(t, data[cvk], color=COLORS[i % len(COLORS)], linewidth=0.6, alpha=0.8)
+        ax.set_ylabel(f'CV {i}')
+        ax.set_xlabel(t_label)
+        ax.grid(True, alpha=0.3)
+        # Horizontal reference at y=0
+        ax.axhline(y=0, color='grey', linestyle='--', linewidth=0.5, alpha=0.5)
+    
+    save_figure(fig, outdir, 'meta_cv_time')
+    plt.close(fig)
+    
+    # Figure 2: Height over time
+    height_csv = os.path.join(analysis_dir, 'meta_height.csv')
+    if os.path.exists(height_csv):
+        hdata = read_csv(height_csv)
+        if hdata and len(hdata.get('Height_kcal_mol', [])) > 0:
+            ht = hdata['Time_ps']
+            h_label = 'Time (ps)' if ht[-1] < 5000 else 'Time (ns)'
+            ht_plot = ht / 1000 if ht[-1] > 5000 else ht
+            
+            fig, ax = plt.subplots(figsize=(8, 3))
+            ax.plot(ht_plot, hdata['Height_kcal_mol'], color=PALETTE['orange'], linewidth=0.8)
+            ax.set_xlabel(h_label)
+            ax.set_ylabel('Gaussian Height (kcal/mol)')
+            ax.grid(True, alpha=0.3)
+            save_figure(fig, outdir, 'meta_height')
+            plt.close(fig)
+    
+    # Figure 3: FES (1D or 2D)
+    fes_files = sorted(Path(analysis_dir).glob('meta_fes_*.csv'))
+    for fes_path in fes_files:
+        fes_data = read_csv(str(fes_path))
+        if not fes_data:
+            continue
+        
+        fes_name = fes_path.stem  # meta_fes_1d or meta_fes_2d
+        
+        if '1d' in fes_name:
+            # 1D FES: line plot
+            fig, ax = plt.subplots(figsize=(7, 4))
+            cv_key = [k for k in fes_data if k.startswith('CV_')][0]
+            ax.plot(fes_data[cv_key], fes_data['Free_Energy_kcal_mol'], 
+                    color=PALETTE['blue'], linewidth=1.0)
+            ax.set_xlabel('CV 0')
+            ax.set_ylabel('Free Energy (kcal/mol)')
+            ax.grid(True, alpha=0.3)
+            save_figure(fig, outdir, 'meta_fes_1d')
+            plt.close(fig)
+        
+        elif '2d' in fes_name:
+            # 2D FES: contour + pcolormesh
+            # Reconstruct from scattered data
+            cv_keys = sorted([k for k in fes_data if k.startswith('CV_')])
+            if len(cv_keys) >= 2:
+                x = fes_data[cv_keys[0]]
+                y = fes_data[cv_keys[1]]
+                z = fes_data['Free_Energy_kcal_mol']
+                
+                # Determine grid dimensions from bins
+                n_unique_x = len(set(np.round(x, 6)))
+                n_unique_y = len(set(np.round(y, 6)))
+                if n_unique_x < 2 or n_unique_y < 2:
+                    print(f'  ⚠ FES grid too small: {n_unique_x}×{n_unique_y}')
+                    continue
+                
+                nx = int(np.sqrt(len(x) * n_unique_x / n_unique_y))
+                ny = len(x) // nx
+                if nx * ny != len(x):
+                    # Try to infer from data pattern
+                    for test_nx in range(10, 100):
+                        if len(x) % test_nx == 0:
+                            nx = test_nx
+                            ny = len(x) // nx
+                            break
+                
+                try:
+                    X = x.reshape(ny, nx)
+                    Y = y.reshape(ny, nx)
+                    Z = z.reshape(ny, nx)
+                except ValueError:
+                    print('  ⚠ Could not reshape FES grid')
+                    continue
+                
+                # Shift FES to min=0
+                Z = Z - np.nanmin(Z)
+                
+                fig, ax = plt.subplots(figsize=(8, 6))
+                levels = np.linspace(0, np.nanmax(Z) * 0.8, 15)
+                cf = ax.contourf(X, Y, Z, levels=levels, cmap='RdYlBu_r', extend='max')
+                ax.contour(X, Y, Z, levels=levels, colors='black', linewidths=0.2, alpha=0.5)
+                cbar = fig.colorbar(cf, ax=ax, label='Free Energy (kcal/mol)', shrink=0.85)
+                ax.set_xlabel('CV 0')
+                ax.set_ylabel('CV 1')
+                ax.set_title('Free Energy Surface')
+                save_figure(fig, outdir, 'meta_fes_2d')
+                plt.close(fig)
+    
+    print('  ── Metadynamics ──')
+
+
 # ═══════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════
@@ -1141,7 +1267,7 @@ def plot_cluster(analysis_dir, outdir):
 def main():
     parser = argparse.ArgumentParser(description='Desmond MD publication-quality plotting')
     parser.add_argument('analysis_dir', help='Path to analysis directory (with CSV files)')
-    parser.add_argument('--type', choices=['energy', 'hbonds', 'water_shells', 'contacts', 'rmsd', 'rmsf', 'rdf', 'density', 'rg', 'distance', 'water_res', 'dipole', 'freevol', 'cluster', 'dashboard', 'all'],
+    parser.add_argument('--type', choices=['energy', 'hbonds', 'water_shells', 'contacts', 'rmsd', 'rmsf', 'rdf', 'density', 'rg', 'distance', 'water_res', 'dipole', 'freevol', 'cluster', 'meta', 'dashboard', 'all'],
                         default='all', help='Plot type')
     parser.add_argument('--dpi', type=int, default=300, help='Output DPI (default: 300)')
     args = parser.parse_args()
@@ -1252,6 +1378,12 @@ def main():
             print('── Conformational Clustering ──')
             plot_cluster_scatter(analysis_dir, outdir)
             plot_cluster(analysis_dir, outdir)
+
+    # Metadynamics
+    if plot_type in ('meta', 'all'):
+        if (Path(analysis_dir) / 'meta_cv_time.csv').exists():
+            print('── Metadynamics ──')
+            plot_meta(analysis_dir, outdir)
 
     # Summary dashboard
     if plot_type in ('dashboard', 'all'):

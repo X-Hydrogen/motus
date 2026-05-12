@@ -114,7 +114,7 @@ if [[ "$FIG_ONLY" -eq 1 ]]; then
     fi
     log "Found $NCSV CSV files in $ANADIR/"
 
-    PLOT_SCRIPT="$SCRIPT_DIR/desmond_plot.py"
+    PLOT_SCRIPT="$SCRIPT_DIR/functions/desmond_plot.py"
     if [[ ! -f "$PLOT_SCRIPT" ]]; then
         error "desmond_plot.py not found at $PLOT_SCRIPT"
         exit 1
@@ -132,7 +132,7 @@ if [[ "$FIG_ONLY" -eq 1 ]]; then
     NPNG=$(find "$ANADIR/figures" -name "*.png" 2>/dev/null | wc -l)
 
     # Also process SIMA .dat files if present
-    SIMA_SCRIPT="$SCRIPT_DIR/sima_plot.py"
+    SIMA_SCRIPT="$SCRIPT_DIR/functions/sima_plot.py"
     SIMA_FILES=$(find "$ANADIR" -maxdepth 1 -name "*.dat" 2>/dev/null | wc -l)
     if [[ $SIMA_FILES -gt 0 ]] && [[ -f "$SIMA_SCRIPT" ]]; then
         log "Processing Simulation Interactions Diagram data ($SIMA_FILES .dat files)..."
@@ -544,7 +544,7 @@ else
 fi
 
 # 6d: Simulation Interactions Diagram generation (auto-detect ligand)
-SIMA_GEN_SCRIPT="$SCRIPT_DIR/sima_gen.py"
+SIMA_GEN_SCRIPT="$SCRIPT_DIR/functions/sima_gen.py"
 if [[ -f "$SIMA_GEN_SCRIPT" ]]; then
     log "Running Simulation Interactions Diagram generation..."
     # For non-protein: auto-detect largest molecule as ligand
@@ -560,7 +560,7 @@ if [[ -f "$SIMA_GEN_SCRIPT" ]]; then
         # Auto-run plotting on generated .dat files
         if [[ -f "$ANADIR/L_Torsions.dat" ]]; then
             log "  → Generating SIMA figures..."
-            SIMA_PLOT_SCRIPT="$SCRIPT_DIR/sima_plot.py"
+            SIMA_PLOT_SCRIPT="$SCRIPT_DIR/functions/sima_plot.py"
             if [[ -f "$SIMA_PLOT_SCRIPT" ]]; then
                 python3 "$SIMA_PLOT_SCRIPT" "$ANADIR" --type all 2>&1 | \
                     grep '✓' | while IFS= read -r line; do
@@ -585,7 +585,7 @@ report_sep
 header "7. Radial Distribution Function (RDF)"
 cd "$ANADIR"
 
-RDF_SCRIPT="$SCRIPT_DIR/rdf_gen.py"
+RDF_SCRIPT="$SCRIPT_DIR/functions/rdf_gen.py"
 if [[ -f "$RDF_SCRIPT" ]]; then
     log "Computing element-pair, molecular, and water-shell RDFs..."
     RDF_OUT=$($RUN_SCHROD python3 "$RDF_SCRIPT" \
@@ -601,7 +601,7 @@ if [[ -f "$RDF_SCRIPT" ]]; then
         # Auto-plot RDFs
         if [[ $NRDF -gt 0 ]]; then
             log "  → Generating RDF figures..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type rdf 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type rdf 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -622,7 +622,7 @@ report_sep
 header "8. Density Cross-Section Analysis"
 cd "$ANADIR"
 
-DENSITY_SCRIPT="$SCRIPT_DIR/density_gen.py"
+DENSITY_SCRIPT="$SCRIPT_DIR/functions/density_gen.py"
 if [[ -f "$DENSITY_SCRIPT" ]]; then
     log "Computing 1D + 2D density profiles (water, solute, all)..."
     DENSITY_OUT=$($RUN_SCHROD python3 "$DENSITY_SCRIPT" \
@@ -636,7 +636,7 @@ if [[ -f "$DENSITY_SCRIPT" ]]; then
         log "  Generated $NDENS density CSV files"
         if [[ $NDENS -gt 0 ]]; then
             log "  → Generating density figures..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type density 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type density 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -657,7 +657,7 @@ report_sep
 header "9. Radius of Gyration"
 cd "$ANADIR"
 
-RG_SCRIPT="$SCRIPT_DIR/rg_gen.py"
+RG_SCRIPT="$SCRIPT_DIR/functions/rg_gen.py"
 if [[ -f "$RG_SCRIPT" ]]; then
     log "Computing radius of gyration for solute molecules..."
     RG_OUT=$($RUN_SCHROD python3 "$RG_SCRIPT" \
@@ -671,7 +671,7 @@ if [[ -f "$RG_SCRIPT" ]]; then
         log "  Generated $NRG Rg CSV file(s)"
         if [[ $NRG -gt 0 ]]; then
             log "  → Generating Rg figures..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type rg 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type rg 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -692,7 +692,7 @@ report_sep
 header "10. Distance Monitoring"
 cd "$ANADIR"
 
-DIST_SCRIPT="$SCRIPT_DIR/dist_gen.py"
+DIST_SCRIPT="$SCRIPT_DIR/functions/dist_gen.py"
 if [[ -f "$DIST_SCRIPT" ]]; then
     log "Auto-detecting key inter-molecular distances..."
     DIST_OUT=$($RUN_SCHROD python3 "$DIST_SCRIPT" \
@@ -706,7 +706,7 @@ if [[ -f "$DIST_SCRIPT" ]]; then
         log "  Monitored $NDIST distance pairs"
         if [[ $NDIST -gt 0 ]]; then
             log "  → Generating distance figure..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type distance 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type distance 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -727,7 +727,7 @@ report_sep
 header "11. Water Residence Time"
 cd "$ANADIR"
 
-WATERRES_SCRIPT="$SCRIPT_DIR/water_res_gen.py"
+WATERRES_SCRIPT="$SCRIPT_DIR/functions/water_res_gen.py"
 if [[ -f "$WATERRES_SCRIPT" ]]; then
     log "Computing water residence time in first solvation shell..."
     WATERRES_OUT=$($RUN_SCHROD python3 "$WATERRES_SCRIPT" \
@@ -739,7 +739,7 @@ if [[ -f "$WATERRES_SCRIPT" ]]; then
         done
         if [[ -f "$ANADIR/water_residence_survival.csv" ]]; then
             log "  → Generating residence time figure..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type water_res 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type water_res 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -760,7 +760,7 @@ report_sep
 header "12. Conformational Clustering"
 cd "$ANADIR"
 
-CLUSTER_SCRIPT="$SCRIPT_DIR/cluster_gen.py"
+CLUSTER_SCRIPT="$SCRIPT_DIR/functions/cluster_gen.py"
 if [[ -f "$CLUSTER_SCRIPT" ]]; then
     log "Performing hierarchical RMSD clustering + PCA projection..."
     CLUSTER_OUT=$($RUN_SCHROD python3 "$CLUSTER_SCRIPT" \
@@ -772,7 +772,7 @@ if [[ -f "$CLUSTER_SCRIPT" ]]; then
         done
         if [[ -f "$ANADIR/cluster_assignments.csv" ]]; then
             log "  → Generating clustering figures..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type cluster 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type cluster 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -793,7 +793,7 @@ report_sep
 header "13. Molecular Dipole Moment"
 cd "$ANADIR"
 
-DIPOLE_SCRIPT="$SCRIPT_DIR/dipole_gen.py"
+DIPOLE_SCRIPT="$SCRIPT_DIR/functions/dipole_gen.py"
 if [[ -f "$DIPOLE_SCRIPT" ]]; then
     log "Computing molecular dipole moments..."
     DIPOLE_OUT=$($RUN_SCHROD python3 "$DIPOLE_SCRIPT" \
@@ -807,7 +807,7 @@ if [[ -f "$DIPOLE_SCRIPT" ]]; then
         log "  Generated $NDIPOLE dipole CSV file(s)"
         if [[ $NDIPOLE -gt 0 ]]; then
             log "  → Generating dipole figures..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type dipole 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type dipole 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -828,7 +828,7 @@ report_sep
 header "14. Free Volume Analysis"
 cd "$ANADIR"
 
-FREEVOL_SCRIPT="$SCRIPT_DIR/freevol_gen.py"
+FREEVOL_SCRIPT="$SCRIPT_DIR/functions/freevol_gen.py"
 if [[ -f "$FREEVOL_SCRIPT" ]]; then
     log "Computing free volume / void space..."
     FREEVOL_OUT=$($RUN_SCHROD python3 "$FREEVOL_SCRIPT" \
@@ -840,7 +840,7 @@ if [[ -f "$FREEVOL_SCRIPT" ]]; then
         done
         if [[ -f "$ANADIR/free_volume.csv" ]]; then
             log "  → Generating free volume figure..."
-            python3 "$SCRIPT_DIR/desmond_plot.py" "$ANADIR" --type freevol 2>&1 | \
+            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type freevol 2>&1 | \
                 grep '✓\|──' | while IFS= read -r line; do
                 log "    $line"
             done
@@ -862,7 +862,7 @@ if [[ "$DO_PLOT" -eq 1 ]]; then
     header "15. Generating Publication Figures"
     cd "$ANADIR"
 
-    PLOT_SCRIPT="$SCRIPT_DIR/desmond_plot.py"
+    PLOT_SCRIPT="$SCRIPT_DIR/functions/desmond_plot.py"
     if [[ ! -f "$PLOT_SCRIPT" ]]; then
         error "desmond_plot.py not found at $PLOT_SCRIPT"
     else
