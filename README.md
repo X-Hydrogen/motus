@@ -98,18 +98,28 @@ The long-term vision: a **fully automated MD agent** that handles analysis and f
 
 ---
 
-## Conformational Clustering — ML-Style PCA Scatter
+## Figure Galleries
 
-Hierarchical RMSD clustering + PCA projection with **convex hulls**, **diamond cluster centroids**, and **time-evolution coloring** — journal-quality visualization.
+Each engine has its own figure gallery with detailed descriptions:
+
+| Engine | Gallery | Figures |
+|--------|---------|---------|
+| **Desmond** | [`docs/images/desmond/`](docs/images/desmond/README.md) | 23 figures covering 15 analysis types |
+| **GROMACS** | [`docs/images/gromacs/`](docs/images/gromacs/README.md) | 8 figures covering 7 analysis types |
+| **LAMMPS** | [`docs/images/lammps/`](docs/images/lammps/README.md) | 5 figures covering 4 analysis types |
+
+All figures are engine-agnostic: every plot type works identically across all three engines where the analysis module is available.
+
+### Quick Preview — Conformational Clustering (PCA Scatter)
+
+Hierarchical RMSD clustering + PCA projection with **convex hulls**, **diamond cluster centroids**, and **time-evolution coloring**.
 
 <p align="center">
-  <img src="docs/images/cluster_pca_scatter.png" alt="PCA Scatter" width="650">
+  <img src="docs/images/desmond/cluster_pca_scatter.png" alt="PCA Scatter" width="650">
 </p>
 
-Multi-panel dashboard: **bar chart + pie chart** for cluster populations.
-
 <p align="center">
-  <img src="docs/images/cluster_population.png" alt="Cluster Population" width="650">
+  <img src="docs/images/desmond/cluster_population.png" alt="Cluster Population" width="650">
 </p>
 
 ---
@@ -140,8 +150,12 @@ motus/
 ├── README.md                      ← You are here
 ├── LICENSE                        ← MIT
 ├── .gitignore
-├── docs/images/                   ← Screenshots for documentation
-│
+├── docs/images/                   ← Documentation screenshots
+│   ├── MOTUS-top.png              ← Banner
+│   ├── MOTUS-middle.png           ← Overview diagram
+│   ├── desmond/                   ← Desmond figure gallery (+ README)
+│   ├── gromacs/                   ← GROMACS figure gallery (+ README)
+│   └── lammps/                    ← LAMMPS figure gallery (+ README)
 ├── desmond/                       ← Desmond engine scripts
 │   ├── desmond-md.sh              ← MD job submission & monitoring
 │   ├── desmond-analysis.sh        ← Post-processing pipeline (15 modules)
