@@ -554,6 +554,185 @@ def plot_meta_cv_time(adir, outdir):
 
 
 # ═══════════════════════════════════════════
+# Reaction Kinetics Plots
+# ═══════════════════════════════════════════
+
+import pandas as pd
+
+def plot_species_vs_time(adir, outdir):
+    """Stacked area plot of species counts/concentrations over time."""
+    csv_path = os.path.join(adir, 'species_timeseries.csv')
+    if not os.path.exists(csv_path):
+        return
+    
+    d = pd.read_csv(csv_path)
+    if len(d.columns) <= 2:
+        return
+    
+    # Find time column
+    time_col = None
+    for c in ['Time_ps', 'time', 'Time']:
+        if c in d.columns:
+            time_col = c
+            break
+    if time_col is None:
+        time_col = d.columns[0]
+    
+    t = d[time_col].values
+    # Convert to ns if needed
+    tlabel = 'Time (ps)'
+    if t[-1] > 5000:
+        t = t / 1000
+        tlabel = 'Time (ns)'
+    
+    # Species columns (all except time/frame)
+    species_cols = [c for c in d.columns if c not in (time_col, 'Frame', 'Step')]
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Stacked area
+    colors = plt.cm.tab10(np.linspace(0, 1, len(species_cols)))
+    ax1.stackplot(t, *[d[c].values for c in species_cols], 
+                  labels=species_cols, colors=colors, alpha=0.7)
+    ax1.set_xlabel(tlabel)
+    ax1.set_ylabel('Count')
+    ax1.set_title('Species Count vs Time')
+    ax1.legend(fontsize=7, loc='upper right')
+    
+    # Line plot for key species
+    for i, col in enumerate(species_cols):
+        ax2.plot(t, d[col].values, color=COLORS[i % len(COLORS)], 
+                linewidth=0.8, label=col, alpha=0.85)
+    ax2.set_xlabel(tlabel)
+    ax2.set_ylabel('Count')
+    ax2.set_title('Species Evolution')
+    ax2.legend(fontsize=7)
+    
+    plt.tight_layout()
+    save_figure(fig, outdir, 'species_timeseries')
+    plt.close(fig)
+
+
+def plot_reaction_rate(adir, outdir):
+    """First-order reaction rate fit from species concentration data."""
+    csv_path = os.path.join(adir, 'species_timeseries.csv')
+    if not os.path.exists(csv_path):
+        return
+    
+    d = pd.read_csv(csv_path)
+    time_col = 'Time_ps' if 'Time_ps' in d.columns else ('time' if 'time' in d.columns else d.columns[0])
+    t = d[time_col].values
+    if t[-1] > 5000:
+        t = t / 1000
+    
+    # Find first species column (usually the reactant)
+    species_cols = [c for c in d.columns if c not in (time_col, 'Frame', 'Step')]
+    if len(species_cols) < 1:
+        return
+    
+    # Use first species as potential reactant
+    reactant = species_cols[0]
+    conc = d[reactant].values.astype(float)
+    
+    # Skip zero concentrations
+    mask = conc > 0
+    if mask.sum() < 5:
+        return
+    t_fit = t[mask]
+    c_fit = conc[mask]
+    ln_c = np.log(c_fit)
+    
+    # Linear fit: ln[C] = -kt + ln[C0]
+    coeffs = np.polyfit(t_fit, ln_c, 1)
+    k = -coeffs[0]
+    ln_c_pred = np.polyval(coeffs, t_fit)
+    ss_res = np.sum((ln_c - ln_c_pred)**2)
+    ss_tot = np.sum((ln_c - np.mean(ln_c))**2)
+    r2 = 1 - ss_res / (ss_tot + 1e-10)
+    
+    fig, ax = plt.subplots(figsize=(7, 5))
+    
+    ax.scatter(t_fit, ln_c, s=5, alpha=0.5, color=PALETTE['blue'], label='Data')
+    ax.plot(t_fit, ln_c_pred, '-', color=PALETTE['red'], linewidth=1.5, 
+            label=f'Fit: k={k:.4e} ps⁻¹, R²={r2:.3f}')
+    
+    ax.set_xlabel('Time (ps)' if 'ps' in str(t[0]) else 'Time (ns)')
+    ax.set_ylabel(f'ln[{reactant}]')
+    ax.set_title(f'First-Order Rate Fit — {reactant}')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(True, alpha=0.3)
+    
+    # Inset with concentration vs time
+    inset = ax.inset_axes([0.55, 0.55, 0.4, 0.4])
+    inset.plot(t_fit, c_fit, color=PALETTE['blue'], linewidth=1)
+    inset.set_xlabel('Time')
+    inset.set_ylabel(reactant, fontsize=8)
+    inset.grid(True, alpha=0.2)
+    
+    plt.tight_layout()
+    save_figure(fig, outdir, 'reaction_rate_fit')
+    plt.close(fig)
+
+
+def plot_product_formation(adir, outdir):
+    """Product concentration vs time with reaction event markers."""
+    csv_path = os.path.join(adir, 'species_timeseries.csv')
+    if not os.path.exists(csv_path):
+        return
+    
+    d = pd.read_csv(csv_path)
+    time_col = 'Time_ps' if 'Time_ps' in d.columns else ('time' if 'time' in d.columns else d.columns[0])
+    t = d[time_col].values
+    if t[-1] > 5000:
+        t = t / 1000
+        tlabel = 'Time (ns)'
+    else:
+        tlabel = 'Time (ps)'
+    
+    species_cols = [c for c in d.columns if c not in (time_col, 'Frame', 'Step')]
+    if len(species_cols) < 2:
+        return
+    
+    fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True)
+    
+    # Top: Species counts
+    for i, col in enumerate(species_cols):
+        axes[0].plot(t, d[col].values, color=COLORS[i % len(COLORS)], 
+                    linewidth=0.8, label=col, alpha=0.85)
+    axes[0].set_ylabel('Count')
+    axes[0].set_title('Reaction Progress')
+    axes[0].legend(fontsize=7, ncol=2)
+    axes[0].grid(True, alpha=0.3)
+    
+    # Bottom: Conversion fraction
+    if len(species_cols) >= 2:
+        # Assume first is reactant, rest are products
+        reactant = d[species_cols[0]].values.astype(float)
+        products = sum(d[c].values.astype(float) for c in species_cols[1:])
+        total_mass = reactant + products + 1e-10
+        
+        axes[1].fill_between(t, 0, reactant / total_mass, 
+                            alpha=0.6, color=PALETTE['blue'], label=species_cols[0])
+        
+        bottom = reactant / total_mass
+        for i, col in enumerate(species_cols[1:]):
+            frac = d[col].values / total_mass
+            axes[1].fill_between(t, bottom, bottom + frac, 
+                                alpha=0.6, color=COLORS[(i+1) % len(COLORS)], label=col)
+            bottom += frac
+        
+        axes[1].set_xlabel(tlabel)
+        axes[1].set_ylabel('Fraction')
+        axes[1].set_title('Mole Fraction')
+        axes[1].legend(fontsize=7, ncol=2)
+        axes[1].set_ylim(0, 1.05)
+    
+    plt.tight_layout()
+    save_figure(fig, outdir, 'product_formation')
+    plt.close(fig)
+
+
+# ═══════════════════════════════════════════
 # Main dispatch
 # ═══════════════════════════════════════════
 PLOTTERS = {
@@ -563,6 +742,7 @@ PLOTTERS = {
     'dashboard': [plot_summary_dashboard],
     'meta':      [plot_meta_cv_time],
     'cluster':   [plot_cluster_sizes, plot_cluster_timeline, plot_cluster_scatter],
+    'reaction':  [plot_species_vs_time, plot_reaction_rate, plot_product_formation],
 }
 
 if __name__ == '__main__':

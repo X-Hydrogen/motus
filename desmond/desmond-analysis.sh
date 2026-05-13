@@ -3,7 +3,8 @@
 # desmond-analysis.sh — Comprehensive Desmond MD Analysis  |  MOTUS v0.0.1
 # ============================================================
 # Usage:
-#   desmond-analysis.sh <md_job_folder> [OPTIONS]
+#   desmond-analysis.sh [md_job_folder] [OPTIONS]
+#   (Run from within the folder to auto-detect, or pass the folder as argument)
 #
 # Options:
 #   --plot              Full analysis + generate publication figures (PDF+PNG)
@@ -83,7 +84,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Validation ──
-[[ -z "$MD_FOLDER" ]] && error "No MD folder provided.\nUsage: $0 <desmond_md_job_XXXXX>" && exit 1
+[[ -z "$MD_FOLDER" ]] && MD_FOLDER="$PWD"
 [[ ! -d "$MD_FOLDER" ]] && error "Folder not found: $MD_FOLDER" && exit 1
 
 MD_DIR=$(realpath "$MD_FOLDER")
@@ -272,7 +273,7 @@ if [[ -n "$ENE" ]]; then
     
     # Extract data (skip 10 header lines)
     tail -n +11 "$ENE" | awk '{
-        time=$1; etot=$2; epot=$3; ekin=$4; press=$7; vol=$8; temp=$9
+        time=$1; etot=$2; epot=$3; ekin=$4; press=$8; vol=$9; temp=$10
         n++; sum_t+=temp; sum_p+=press; sum_v+=vol; sum_e+=etot; sum_ep+=epot
         sum_t2+=temp*temp; sum_p2+=press*press
         
@@ -302,7 +303,7 @@ if [[ -n "$ENE" ]]; then
     # Generate energy time-series CSV for further plotting
     log "Generating energy CSV..."
     echo "Time_ps,Total_E_kcal,Pot_E_kcal,Kin_E_kcal,Pressure_bar,Vol_A3,Temp_K" > "$ANADIR/energy_timeseries.csv"
-    tail -n +11 "$ENE" | awk '{printf "%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.3f\n", $1,$2,$3,$4,$7,$8,$9}' >> "$ANADIR/energy_timeseries.csv"
+    tail -n +11 "$ENE" | awk '{printf "%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.3f\n", $1,$2,$3,$4,$8,$9,$10}' >> "$ANADIR/energy_timeseries.csv"
     log "  → energy_timeseries.csv ($(wc -l < "$ANADIR/energy_timeseries.csv") rows)"
 else
     skip "No .ene file found"

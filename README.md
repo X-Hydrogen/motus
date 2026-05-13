@@ -5,7 +5,7 @@
 <h3 align="center"><em>Molecular Dynamics Automation Agent — From Atoms to Insights, in One Command</em></h3>
 
 <p align="center">
-  <strong>Version 0.0.2</strong> &nbsp;|&nbsp;
+  <strong>Version 0.0.3</strong> &nbsp;|&nbsp;
   Desmond MD ✅ &bull; GROMACS ✅ &bull; LAMMPS ✅
 </p>
 
@@ -32,12 +32,15 @@ Across all these fields, the bottleneck is the same: **turning terabytes of simu
 One command. Three engines. Fifteen analysis types. Zero manual plotting.
 
 ```bash
-# From raw trajectory to complete analysis package
-./desmond/desmond-analysis.sh desmond_md_job_my-system --plot
+# From raw trajectory to complete analysis package — run from within the job folder
+cd desmond_md_job_my-system
+../motus/desmond/desmond-analysis.sh --plot
 # → energy, Hbonds, RDF, density, dipole, clustering, PCA, SIMA...
 # → all figures in PDF (vector) + PNG (300 DPI)
-# → < 2 minutes on GPU
+# → < 2 minutes
 ```
+
+**New in v0.0.3:** Auto-detect current working directory — no folder paths needed. Just `cd` into your job folder and run. Supports Maestro output from both Windows (CRLF) and Linux, with automatic line-ending conversion.
 
 <p align="center">
   <img src="docs/images/MOTUS-middle.png" alt="MOTUS Overview" width="700">
@@ -49,16 +52,38 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 
 ### Desmond
 
+**Recommended workflow:** Set up your system in Maestro (Windows or Linux), write the job files, then run on your GPU server.
+
 ```bash
-# MD production run
-./desmond/desmond-md.sh desmond_setup_my-system -w
+# 1. Copy the Maestro-generated folder to your Linux server
+#    Maestro produces: desmond_md_job_my-system/{.cms, .msj, .cfg}
 
-# Full analysis + figures
-./desmond/desmond-analysis.sh desmond_md_job_my-system --plot
+# 2. Enter the folder and launch MD
+cd desmond_md_job_my-system
+bash ../motus/desmond/desmond-md.sh                     # Use Maestro settings as-is
+bash ../motus/desmond/desmond-md.sh -t 5000 -i 2.5     # Or override time & interval
 
-# Figures only (re-plot from existing CSV)
-./desmond/desmond-analysis.sh desmond_md_job_my-system --fig-only
+#    Real-time output: Stage progress + production progress bar
+#      Stage 1 completed.  Stage 2 completed.  ...
+#      [=========-----] 65% | 32500/50000 ps | 2513 ns/day
+
+# 3. Full analysis + figures (same folder)
+bash ../motus/desmond/desmond-analysis.sh --plot
+
+# 4. Re-plot from existing data (seconds)
+bash ../motus/desmond/desmond-analysis.sh --fig-only
 ```
+
+**Key features:**
+- **Windows & Linux Maestro** — auto-detects and fixes CRLF line endings (`\r\n` → `\n`)
+- **CWD auto-detection** — no folder path needed; just `cd` into the job folder
+- **Real-time progress bar** — shows `Chemical time`, `ns/day`, and percentage during MD runs
+- **Dynamic server paths** — auto-discovers Schrödinger scratch directory (works across different cluster configurations)
+- **Stage-by-stage monitoring** — shows `_multisim.log` output during equilibration phases
+
+**Legacy mode** (`--mode 2`): Build from a `desmond_setup_XXXXX` folder (generates `.msj` and `.cfg` from CLI parameters):
+```bash
+./desmond/desmond-md.sh --mode 2 desmond_setup_my-system -t 2000 -i 1
 
 ### GROMACS
 
@@ -77,15 +102,29 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 ### LAMMPS
 
 ```bash
-# MD production run
+# Standard MD production run
 ./lammps/lammps-md.sh system.data
 
 # Analysis + figures
 ./lammps/lammps-analysis.sh md_output/
 
-# Metadynamics with COLVARS
+# Enhanced sampling
 ./lammps/lammps-metadynamics.sh md_output/
+
+# Reactive MD — ReaxFF (high-temperature reaction kinetics)
+./lammps/lammps-reaxff.sh system.data -T 2500 -t 500
+./lammps/lammps-reaxff-analysis.sh md_output/
+
+# Reactive MD — fix bond/react (template-driven at any temperature)
+./lammps/lammps-bond-react.sh system.data -m reaction.yaml -T 400 -t 2000
 ```
+
+**LAMMPS Reaction Kinetics** (`lammps-reaxff.sh`, `lammps-bond-react.sh`, `lammps-reaxff-analysis.sh`):
+- **ReaxFF** — reactive force field MD with automatic species tracking; suitable for high-T pyrolysis and combustion
+- **fix bond/react** — template-driven reaction MD for ambient-temperature kinetics (e.g., hydrolysis, polymerization)
+- **`reaction_analysis.py`** — shared analysis engine: species counting, concentration profiles, first/second-order rate fitting, Arrhenius parameter extraction across multiple temperatures
+- **`bond_react_gen.py`** — YAML → LAMMPS native molecule template + reaction map file generator
+- **Plot types** — species timeseries (stacked area + line), reaction rate (ln[C] vs t with R²), product formation (mole fraction evolution)
 
 **Requirements:**
 - Linux; Schrödinger Suite (for Desmond), GROMACS, LAMMPS
@@ -99,6 +138,9 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 | Feature | Desmond | GROMACS | LAMMPS |
 |:--------|:-------:|:-------:|:------:|
 | **MD Production** (EM + Equil + Prod) | ✅ | ✅ | ✅ |
+| **Cross-Platform Maestro** (Win/Linux CRLF auto-fix) | ✅ | — | — |
+| **CWD Auto-Detection** (no folder args) | ✅ | — | — |
+| **Real-Time Progress Bar** | ✅ | — | — |
 | **Metadynamics** (Well-Tempered / Standard) | ✅ (native) | ✅ (PLUMED) | ✅ (COLVARS) |
 | **Umbrella Sampling + WHAM** | — | ✅ | — |
 | Energy / T / P / Vol / Density | ✅ | ✅ | ✅ |
@@ -116,6 +158,9 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 | Free Volume / Void Analysis | ✅ | — | — |
 | Dihedral / Angle Analysis | — | ✅ | — |
 | Contact Matrix | — | ✅ | — |
+| **ReaxFF Reactive MD** | — | — | ✅ |
+| **fix bond/react Kinetics** | — | — | ✅ |
+| **Arrhenius Rate Fitting** | — | — | ✅ |
 | **CMS↔GROMACS/LAMMPS Converter** | `cms2gmx.py` | `cms2lmp.py` | — |
 
 ---
@@ -126,9 +171,9 @@ All figures below were generated **fully automatically** by MOTUS from a single 
 
 | Engine | Gallery | Figures |
 |--------|---------|---------|
-| **Desmond** | [`docs/images/desmond/`](docs/images/desmond/README.md) | 23 figures · 15 analysis types |
+| **Desmond** | [`docs/images/desmond/`](docs/images/desmond/README.md) | 31 figures · 15 analysis types |
 | **GROMACS** | [`docs/images/gromacs/`](docs/images/gromacs/README.md) | 8 figures · 7 analysis types |
-| **LAMMPS** | [`docs/images/lammps/`](docs/images/lammps/README.md) | 5 figures · 4 analysis types |
+| **LAMMPS** | [`docs/images/lammps/`](docs/images/lammps/README.md) | 8 figures · 5 analysis types |
 
 ---
 
@@ -354,12 +399,18 @@ motus/
 │       └── gromacs_meta_gen.py    ← PLUMED input generator
 │
 ├── lammps/                        ← LAMMPS engine scripts
-│   ├── lammps-md.sh               ← MD production
+│   ├── lammps-md.sh               ← Standard MD production
 │   ├── lammps-analysis.sh         ← Post-processing pipeline
 │   ├── lammps-metadynamics.sh     ← COLVARS MetaD pipeline
+│   ├── lammps-reaxff.sh           ← ReaxFF reactive MD
+│   ├── lammps-reaxff-analysis.sh  ← ReaxFF species + kinetics analysis
+│   ├── lammps-bond-react.sh       ← fix bond/react template-driven MD
 │   └── functions/
-│       ├── lammps_plot.py         ← Figure generator (6 plot types)
-│       └── lammps_colvars_gen.py  ← COLVARS input generator
+│       ├── lammps_plot.py         ← Figure generator (9 plot types incl. reaction)
+│       ├── lammps_colvars_gen.py  ← COLVARS input generator
+│       ├── reaction_analysis.py   ← Species counting, rate fitting, Arrhenius
+│       ├── bond_react_gen.py      ← YAML → LAMMPS template + map generator
+│       └── gen_urea_data.py       ← Urea+water test system builder
 │
 └── converters/                    ← Cross-engine CMS converters
     ├── cms2gmx.py                 ← Desmond CMS → GROMACS topology
@@ -381,6 +432,8 @@ motus/
 | COLVARS MetaD (LAMMPS) | ✅ |
 | Umbrella sampling + WHAM (GROMACS) | ✅ |
 | Cross-engine cluster plots (Desmond-style) | ✅ |
+| **Cross-platform Maestro (Win/Linux, CWD auto-detect, progress bar)** | ✅ v0.0.3 |
+| **LAMMPS reactive MD — ReaxFF + fix bond/react + Arrhenius fitting** | ✅ v0.0.3 |
 | Solvent structure analysis (sorient/spatial/h2order) | 🚧 Planned |
 | Electrostatic Potential (ESP) | 🚧 Planned |
 | Unified MOTUS CLI | 🚧 Planned |
@@ -399,7 +452,7 @@ MIT — see [LICENSE](LICENSE) file.
 If you use MOTUS in your research, please cite:
 
 ```
-MOTUS: Molecular Dynamics Automation Agent. Version 0.0.2.
+MOTUS: Molecular Dynamics Automation Agent. Version 0.0.3.
 https://github.com/X-Hydrogen/motus
 ```
 

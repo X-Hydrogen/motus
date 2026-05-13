@@ -2,14 +2,15 @@
 # ============================================================
 # desmond-md.sh — Automated Schrödinger Desmond MD Pipeline
 # ============================================================
-# See SKILL.md for full usage instructions.
+# MOTUS v0.0.1 — See SKILL.md for full usage instructions.
 #
-# Minimal usage:
-#   ./desmond-md.sh <desmond_setup_XXXXX>
-#   ./desmond-md.sh <desmond_setup_XXXXX> -t 2000 -i 1
+# Mode 1 (default): Run from WITHIN a desmond_md_job_XXXXX folder
+#   cd ~/xhy/desmond_md_job_urea-hydrolysis
+#   bash ../motus/desmond/desmond-md.sh                # Use Maestro settings
+#   bash ../motus/desmond/desmond-md.sh -t 5000 -i 2.5 # Optional: override
 #
-# The setup folder must contain <name>-out.cms (from System Builder).
-# Automatically creates desmond_md_job_XXXXX alongside it and runs the MD.
+# Mode 2 (--mode 2): Old behavior — from a desmond_setup_XXXXX folder
+#   bash motus/desmond/desmond-md.sh --mode 2 ~/xhy/desmond_setup_urea-hydrolysis -t 2000 -i 1
 # ============================================================
 
 set -euo pipefail
@@ -23,13 +24,14 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # ── Defaults ──
-SIM_TIME=2000          # ps
-REC_INTERVAL=1         # ps
-TEMPERATURE=300        # K
-PRESSURE=1.01325       # bar
-CUTOFF=5.0             # Å
+SIM_TIME=-1               # -1 = use .cfg value (no override)
+REC_INTERVAL=-1           # -1 = use .cfg value
+TEMPERATURE=300           # K
+PRESSURE=1.01325          # bar
+CUTOFF=5.0                # Å
 CPU=1
 GPU_LICENSE=16
+MODE=1                    # 1 = md_job folder (CWD), 2 = setup folder (old)
 
 # ── Auto-detect Schrödinger installation ──
 SCHRODINGER="${SCHRODINGER:-}"
@@ -59,10 +61,9 @@ if ! find_schrodinger; then
     echo "    Set SCHRODINGER env var or install in /opt/ or ~/tools/"
     exit 1
 fi
-OUTPUT_DIR=""
 
 usage() {
-    head -28 "$0" | grep '^#' | sed 's/^# \?//'
+    head -15 "$0" | grep '^#' | sed 's/^# \?//'
     exit 0
 }
 
@@ -71,10 +72,30 @@ warn()   { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()  { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 header() { echo -e "\n${BOLD}${CYAN}━━━ $* ━━━${NC}"; }
 
+# ── Fix Windows line endings (auto-detect CRLF) ──
+fix_crlf() {
+    local f="$1"
+    if [[ ! -f "$f" ]]; then return; fi
+    if grep -q $'\r' "$f" 2>/dev/null; then
+        sed -i 's/\r$//' "$f"
+        log "Fixed Windows (CRLF) line endings in $(basename "$f")"
+    fi
+}
+
+# ── Safe integer from .cfg value (handles \r, decimals) ──
+cfg_int() {
+    # Extract a numeric value from .cfg, strip \r and decimal, return int
+    tr -d '\r' < "$1" | awk -v pattern="$2" -v field="$3" '
+        $0 ~ pattern { val=$field; gsub(/[^0-9].*/, "", val); if(val!="") {print val; exit} }
+    '
+}
+
 # ── Parse args ──
-SETUP_FOLDER=""
+TARGET_FOLDER=""
+HAS_POSITIONAL=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --mode)          MODE="$2"; shift 2 ;;
         -t|--time)       SIM_TIME="$2"; shift 2 ;;
         -i|--interval)   REC_INTERVAL="$2"; shift 2 ;;
         -T|--temperature) TEMPERATURE="$2"; shift 2 ;;
@@ -83,68 +104,174 @@ while [[ $# -gt 0 ]]; do
         --cpu)           CPU="$2"; shift 2 ;;
         --gpu-license)   GPU_LICENSE="$2"; shift 2 ;;
         --schrodinger)   SCHRODINGER="$2"; shift 2 ;;
-        --output-dir)    OUTPUT_DIR="$2"; shift 2 ;;
         -h|--help)       usage ;;
         -*)              error "Unknown option: $1" ;;
-        *)               SETUP_FOLDER="$1"; shift ;;
+        *)               TARGET_FOLDER="$1"; HAS_POSITIONAL=1; shift ;;
     esac
 done
 
-# ── Validation ──
-[[ -z "$SETUP_FOLDER" ]] && error "No setup folder provided.\nUsage: $0 <desmond_setup_XXXXX> [OPTIONS]"
-[[ ! -d "$SETUP_FOLDER" ]] && error "Setup folder not found: $SETUP_FOLDER"
-
-SETUP_DIR=$(realpath "$SETUP_FOLDER")
-SETUP_NAME=$(basename "$SETUP_DIR")
-
-# Extract system name from "desmond_setup_XXXXX"
-if [[ "$SETUP_NAME" =~ ^desmond_setup_(.+)$ ]]; then
-    SYSTEM="${BASH_REMATCH[1]}"
-else
-    error "Setup folder must be named 'desmond_setup_XXXXX'\nGot: $SETUP_NAME"
-fi
-
-JOB_NAME="desmond_md_job_${SYSTEM}"
-
-# Find output CMS from setup
-CMS_INPUT=$(ls "$SETUP_DIR/${SETUP_NAME}-out.cms" 2>/dev/null || echo "")
-[[ -z "$CMS_INPUT" ]] && error "No output CMS found in setup folder.\nExpected: $SETUP_DIR/${SETUP_NAME}-out.cms"
-
-# Determine output directory
-if [[ -z "$OUTPUT_DIR" ]]; then
-    OUTPUT_DIR="$(dirname "$SETUP_DIR")/${JOB_NAME}"
-fi
-mkdir -p "$OUTPUT_DIR"
-
-# Validate SCHRODINGER
-[[ ! -d "$SCHRODINGER" ]] && error "SCHRODINGER not found: $SCHRODINGER\nSet with --schrodinger or export SCHRODINGER"
+# ── Validate SCHRODINGER ──
+[[ ! -d "$SCHRODINGER" ]] && error "SCHRODINGER not found: $SCHRODINGER"
 MULTISIM="$SCHRODINGER/utilities/multisim"
 [[ ! -x "$MULTISIM" ]] && error "multisim not found: $MULTISIM"
 
-# ── Calculate derived values ──
-TOTAL_FRAMES=$(( SIM_TIME / REC_INTERVAL ))
-TOTAL_PS=$SIM_TIME
-CHKPT_INTERVAL=$(( TOTAL_PS / 10 ))
-[[ $CHKPT_INTERVAL -lt 50 ]] && CHKPT_INTERVAL=50
-MAEFF_INTERVAL=$CHKPT_INTERVAL
+# ═══════════════════════════════════════════════════
+# MODE 1: md_job folder (default — auto-detect CWD)
+# ═══════════════════════════════════════════════════
+if [[ "$MODE" -eq 1 ]]; then
+    if [[ "$HAS_POSITIONAL" -eq 0 ]]; then
+        TARGET_FOLDER="$PWD"
+    fi
 
-header "Desmond MD Pipeline"
-echo -e "  ${BOLD}System:${NC}        $SYSTEM"
-echo -e "  ${BOLD}Setup folder:${NC}  $SETUP_DIR"
-echo -e "  ${BOLD}Output folder:${NC} $OUTPUT_DIR"
-echo -e "  ${BOLD}Sim time:${NC}      ${TOTAL_PS} ps (${TOTAL_FRAMES} frames)"
-echo -e "  ${BOLD}Record interval:${NC} ${REC_INTERVAL} ps"
-echo -e "  ${BOLD}Temperature:${NC}   ${TEMPERATURE} K"
-echo -e "  ${BOLD}Schrodinger:${NC}   $SCHRODINGER"
+    JOB_DIR=$(realpath "$TARGET_FOLDER")
+    JOB_NAME=$(basename "$JOB_DIR")
 
-# ── Copy CMS input ──
-log "Copying system from setup..."
-cp "$CMS_INPUT" "$OUTPUT_DIR/${JOB_NAME}-in.cms"
-cp "$CMS_INPUT" "$OUTPUT_DIR/${JOB_NAME}.cms"
+    [[ ! -d "$JOB_DIR" ]] && error "Folder not found: $JOB_DIR"
 
-# ── Generate .msj (equilibration protocol) ──
-log "Generating $JOB_NAME.msj..."
-cat > "$OUTPUT_DIR/${JOB_NAME}.msj" << MSJEOF
+    # Find .msj (most critical — defines the protocol)
+    MSJ_FILE=$(ls "$JOB_DIR"/*.msj 2>/dev/null | head -1)
+    [[ -z "$MSJ_FILE" ]] && error "No .msj file found in $JOB_DIR"
+
+    # Find .cfg
+    CFG_FILE=$(ls "$JOB_DIR"/*.cfg 2>/dev/null | grep -v '\-out\.cfg$' | grep -v '\-in\.cfg$' | head -1)
+    if [[ -z "$CFG_FILE" ]]; then
+        CFG_FILE=$(ls "$JOB_DIR"/*.cfg 2>/dev/null | head -1)
+    fi
+    [[ -z "$CFG_FILE" ]] && error "No .cfg file found in $JOB_DIR"
+
+    # Find .cms (input structure — prefer the main one, not -in or -out)
+    CMS_FILE=$(ls "$JOB_DIR"/*.cms 2>/dev/null | grep -v '\-out\.cms$' | grep -v '\-in\.cms$' | head -1)
+    if [[ -z "$CMS_FILE" ]]; then
+        # Fallback: use any .cms
+        CMS_FILE=$(ls "$JOB_DIR"/*.cms 2>/dev/null | head -1)
+    fi
+    [[ -z "$CMS_FILE" ]] && error "No .cms file found in $JOB_DIR"
+
+    # Auto-fix Windows line endings from Maestro
+    fix_crlf "$CFG_FILE"
+    fix_crlf "$MSJ_FILE"
+
+    OUTPUT_DIR="$JOB_DIR"
+
+    header "Desmond MD Pipeline (Mode 1: md_job folder)"
+    echo -e "  ${BOLD}Job folder:${NC}   $JOB_DIR"
+    echo -e "  ${BOLD}Job name:${NC}     $JOB_NAME"
+    echo -e "  ${BOLD}CMS:${NC}          $(basename "$CMS_FILE")"
+    echo -e "  ${BOLD}MSJ:${NC}          $(basename "$MSJ_FILE")"
+    echo -e "  ${BOLD}CFG:${NC}          $(basename "$CFG_FILE")"
+
+    # Warn if previous results exist
+    if [[ -f "$JOB_DIR/${JOB_NAME}.ene" ]]; then
+        warn "Existing .ene found — this folder already has MD results. Output may be overwritten."
+    fi
+
+    # ── Patch .cfg if -t/-i overrides provided ──
+    if [[ "$SIM_TIME" -gt 0 ]] || [[ "$(awk -v ri="$REC_INTERVAL" 'BEGIN{print (ri>0)?1:0}')" -eq 1 ]]; then
+        # Read original values from .cfg (safe: handles \r and decimals)
+        ORIG_TIME=$(cfg_int "$CFG_FILE" '^time = ' 3)
+        ORIG_INTERVAL=$(cfg_int "$CFG_FILE" '^trajectory = \{' 3)
+        # For trajectory block interval, need to parse inside the block
+        ORIG_INTERVAL=$(tr -d '\r' < "$CFG_FILE" | awk '/^trajectory = \{/{found=1} found && /interval =/{val=$3; gsub(/[^0-9].*/,"",val); print val; exit}' )
+
+        TOTAL_PS=${SIM_TIME:-${ORIG_TIME:-2000}}
+        [[ "$SIM_TIME" -le 0 ]] && TOTAL_PS="$ORIG_TIME"
+        REC_INT=${REC_INTERVAL}
+        [[ "$(awk -v ri="$REC_INTERVAL" 'BEGIN{print (ri>0)?1:0}')" -eq 0 ]] && REC_INT="$ORIG_INTERVAL"
+        TOTAL_FRAMES=$(( TOTAL_PS / REC_INT ))
+        CHKPT_INT=$(( TOTAL_PS / 10 ))
+        [[ $CHKPT_INT -lt 50 ]] && CHKPT_INT=50
+
+        log "Patching .cfg: time=${TOTAL_PS}ps, interval=${REC_INT}ps, frames=${TOTAL_FRAMES}, chkpt=${CHKPT_INT}s"
+
+        # Patch time (top-level)
+        sed -i "s/^time = .*/time = ${TOTAL_PS}.0/" "$CFG_FILE"
+
+        # Patch trajectory block: interval + frames_per_file
+        sed -i "/^trajectory = {/,/^}/{
+            s/\(interval = \)[0-9.]\+/\1${REC_INT}.0/
+            s/\(frames_per_file = \)[0-9]\+/\1${TOTAL_FRAMES}/
+        }" "$CFG_FILE"
+
+        # Patch eneseq block: interval
+        sed -i "/^eneseq = {/,/^}/{
+            s/\(interval = \)[0-9.]\+/\1${REC_INT}.0/
+        }" "$CFG_FILE"
+
+        # Patch checkpt block: interval
+        sed -i "/^checkpt = {/,/^}/{
+            s/\(interval = \)[0-9.]\+/\1${CHKPT_INT}.0/
+        }" "$CFG_FILE"
+
+        # Patch maeff_output block: interval
+        sed -i "/^maeff_output = {/,/^}/{
+            s/\(interval = \)[0-9.]\+/\1${CHKPT_INT}.0/
+        }" "$CFG_FILE"
+    else
+        # Use .cfg values (safe: handles \r and decimals via cfg_int)
+        TOTAL_PS=$(cfg_int "$CFG_FILE" '^time = ' 3)
+        REC_INT=$(tr -d '\r' < "$CFG_FILE" | awk '/^trajectory = \{/{found=1} found && /interval =/{val=$3; gsub(/[^0-9].*/,"",val); print val; exit}')
+        [[ -z "$TOTAL_PS" ]] && TOTAL_PS=2000
+        [[ -z "$REC_INT" ]] && REC_INT=1
+        TOTAL_FRAMES=$(( TOTAL_PS / REC_INT ))
+        log "Using .cfg settings: time=${TOTAL_PS}ps, interval=${REC_INT}ps, frames=${TOTAL_FRAMES}"
+    fi
+
+    echo -e "  ${BOLD}Sim time:${NC}      ${TOTAL_PS} ps (${TOTAL_FRAMES} frames)"
+    echo -e "  ${BOLD}Record interval:${NC} ${REC_INT} ps"
+    echo -e "  ${BOLD}Schrodinger:${NC}   $SCHRODINGER"
+
+# ═══════════════════════════════════════════════════
+# MODE 2: setup folder (old behavior)
+# ═══════════════════════════════════════════════════
+elif [[ "$MODE" -eq 2 ]]; then
+    [[ "$HAS_POSITIONAL" -eq 0 ]] && error "Mode 2 requires a desmond_setup_XXXXX folder as argument.\nUsage: $0 --mode 2 <desmond_setup_XXXXX> [OPTIONS]"
+
+    SETUP_DIR=$(realpath "$TARGET_FOLDER")
+    SETUP_NAME=$(basename "$SETUP_DIR")
+    [[ ! -d "$SETUP_DIR" ]] && error "Setup folder not found: $SETUP_DIR"
+
+    # Extract system name from "desmond_setup_XXXXX"
+    if [[ "$SETUP_NAME" =~ ^desmond_setup_(.+)$ ]]; then
+        SYSTEM="${BASH_REMATCH[1]}"
+    else
+        error "Setup folder must be named 'desmond_setup_XXXXX'\nGot: $SETUP_NAME"
+    fi
+
+    JOB_NAME="desmond_md_job_${SYSTEM}"
+
+    # Find output CMS from setup
+    CMS_INPUT=$(ls "$SETUP_DIR/${SETUP_NAME}-out.cms" 2>/dev/null || echo "")
+    [[ -z "$CMS_INPUT" ]] && error "No output CMS found in setup folder.\nExpected: $SETUP_DIR/${SETUP_NAME}-out.cms"
+
+    # Determine output directory
+    OUTPUT_DIR="$(dirname "$SETUP_DIR")/${JOB_NAME}"
+    mkdir -p "$OUTPUT_DIR"
+
+    [[ "$SIM_TIME" -le 0 ]] && SIM_TIME=2000
+    [[ "$(awk -v ri="$REC_INTERVAL" 'BEGIN{print (ri>0)?1:0}')" -eq 0 ]] && REC_INTERVAL=1
+    TOTAL_PS="$SIM_TIME"
+    REC_INT="$REC_INTERVAL"
+    TOTAL_FRAMES=$(( TOTAL_PS / REC_INT ))
+    CHKPT_INT=$(( TOTAL_PS / 10 ))
+    [[ $CHKPT_INT -lt 50 ]] && CHKPT_INT=50
+
+    header "Desmond MD Pipeline (Mode 2: setup folder)"
+    echo -e "  ${BOLD}System:${NC}        $SYSTEM"
+    echo -e "  ${BOLD}Setup folder:${NC}  $SETUP_DIR"
+    echo -e "  ${BOLD}Output folder:${NC} $OUTPUT_DIR"
+    echo -e "  ${BOLD}Sim time:${NC}      ${TOTAL_PS} ps (${TOTAL_FRAMES} frames)"
+    echo -e "  ${BOLD}Record interval:${NC} ${REC_INT} ps"
+    echo -e "  ${BOLD}Temperature:${NC}   ${TEMPERATURE} K"
+    echo -e "  ${BOLD}Schrodinger:${NC}   $SCHRODINGER"
+
+    # ── Copy CMS input ──
+    log "Copying system from setup..."
+    cp "$CMS_INPUT" "$OUTPUT_DIR/${JOB_NAME}-in.cms"
+    cp "$CMS_INPUT" "$OUTPUT_DIR/${JOB_NAME}.cms"
+
+    # ── Generate .msj (equilibration protocol) ──
+    log "Generating $JOB_NAME.msj..."
+    cat > "$OUTPUT_DIR/${JOB_NAME}.msj" << MSJEOF
 # Desmond standard NPT relaxation protocol
 # Auto-generated by desmond-md.sh
 # All times in ps, energy in kcal/mol
@@ -263,9 +390,9 @@ simulate {
 }
 MSJEOF
 
-# ── Generate .cfg (production run) ──
-log "Generating $JOB_NAME.cfg..."
-cat > "$OUTPUT_DIR/${JOB_NAME}.cfg" << CFGEOF
+    # ── Generate .cfg (production run) ──
+    log "Generating $JOB_NAME.cfg..."
+    cat > "$OUTPUT_DIR/${JOB_NAME}.cfg" << CFGEOF
 annealing = false
 backend = {
 }
@@ -274,7 +401,7 @@ box = ?
 bulk_properties = false
 checkpt = {
    first = 0.0
-   interval = ${CHKPT_INTERVAL}.0
+   interval = ${CHKPT_INT}.0
    name = "\$JOBNAME.cpt"
    write_last_step = true
 }
@@ -286,7 +413,7 @@ elapsed_time = 0.0
 energy_group = false
 eneseq = {
    first = 0.0
-   interval = ${REC_INTERVAL}.0
+   interval = ${REC_INT}.0
    name = "\$JOBNAME\$[_replica\$REPLICA\$].ene"
 }
 ensemble = {
@@ -305,7 +432,7 @@ lambda_dynamics = false
 maeff_output = {
    center_atoms = solute
    first = 0.0
-   interval = ${MAEFF_INTERVAL}.0
+   interval = ${CHKPT_INT}.0
    name = "\$JOBNAME\$[_replica\$REPLICA\$]-out.cms"
    periodicfix = true
    trjdir = "\$JOBNAME\$[_replica\$REPLICA\$]_trj"
@@ -346,7 +473,7 @@ trajectory = {
    first = 0.0
    format = dtr
    frames_per_file = ${TOTAL_FRAMES}
-   interval = ${REC_INTERVAL}.0
+   interval = ${REC_INT}.0
    name = "\$JOBNAME\$[_replica\$REPLICA\$]_trj"
    periodicfix = true
    write_last_step = true
@@ -356,11 +483,22 @@ trajectory = {
 wall_force = false
 CFGEOF
 
+    CMS_FILE="$OUTPUT_DIR/${JOB_NAME}.cms"
+    MSJ_FILE="$OUTPUT_DIR/${JOB_NAME}.msj"
+    CFG_FILE="$OUTPUT_DIR/${JOB_NAME}.cfg"
+
+else
+    error "Invalid mode: $MODE. Use 1 (md_job folder, default) or 2 (setup folder)."
+fi
+
+# ═══════════════════════════════════════════════════
+# COMMON: Launch Desmond MD via multisim
+# ═══════════════════════════════════════════════════
+
 # ── Create tmp project dir ──
 PROJ_DIR="$OUTPUT_DIR/.proj_tmp"
 mkdir -p "$PROJ_DIR"
 
-# ── Run ──
 header "Launching Desmond MD"
 log "Job name: $JOB_NAME"
 log "Output dir: $OUTPUT_DIR"
@@ -375,10 +513,10 @@ MULTISIM_OUT=$("$MULTISIM" \
     -HOST localhost \
     -maxjob 1 \
     -cpu "$CPU" \
-    -m "${JOB_NAME}.msj" \
-    -c "${JOB_NAME}.cfg" \
+    -m "$(basename "$MSJ_FILE")" \
+    -c "$(basename "$CFG_FILE")" \
     -description "Molecular Dynamics - ${TOTAL_PS}ps" \
-    "${JOB_NAME}.cms" \
+    "$(basename "$CMS_FILE")" \
     -mode umbrella \
     -PROJ "$PROJ_DIR" \
     -DISP append \
@@ -396,27 +534,92 @@ if [[ -z "$JOB_ID" ]]; then
     EXIT_CODE=$MULTISIM_EXIT
 else
     log "Job ID: $JOB_ID — waiting for completion..."
+    EXIT_CODE=0
 
-    # Block until MD finishes
+    # ── Find scratch directory (varies by server/Schrödinger install) ──
+    SCRATCH_BASE=""
+    find_scratch() {
+        # Try common patterns, return first match containing the job
+        for base in "$SCHRODINGER/scratch/$USER" "$SCHRODINGER/scratch"; do
+            if [[ -d "$base" ]]; then
+                SCRATCH_BASE="$base"
+                return 0
+            fi
+        done
+        return 1
+    }
+    find_scratch || SCRATCH_BASE="$SCHRODINGER/scratch/$USER"
+
+    # ── Poll for completion with stage + progress monitoring ──
     JOBCTL="$SCHRODINGER/jobcontrol"
+    MULTISIM_LOG="${OUTPUT_DIR}/${JOB_NAME}_multisim.log"
+
     if [[ -x "$JOBCTL" ]]; then
-        # Poll in a loop (jobcontrol -wait may not work on all versions)
-        TIMEOUT=$((TOTAL_PS / 10 + 300))  # generous timeout in seconds
-        POLL_INTERVAL=10
+        TIMEOUT=$(( TOTAL_PS / 10 + 600 ))
+        POLL_INTERVAL=5
         ELAPSED_WAIT=0
+        LAST_STAGE_LINE=""
+        LAST_PROGRESS=""
+        STAGE_SHOWN=0
+
         while true; do
+            # ── Show multisim stage output (equilibration progress) ──
+            if [[ -f "$MULTISIM_LOG" ]]; then
+                STAGE_LINE=$(grep -E '^Stage [0-9]|completed\.|failed\.|running' "$MULTISIM_LOG" 2>/dev/null | tail -3) || true
+                if [[ -n "$STAGE_LINE" ]] && [[ "$STAGE_LINE" != "$LAST_STAGE_LINE" ]]; then
+                    echo -e "  ${CYAN}$(echo "$STAGE_LINE" | tail -1)${NC}"
+                    LAST_STAGE_LINE="$STAGE_LINE"
+                    STAGE_SHOWN=1
+                fi
+            fi
+
+            # ── Production progress bar ──
+            # Log is in scratch: $SCRATCH_BASE/$JOB_NAME/$JOB_NAME.log
+            # or sub-stage: $SCRATCH_BASE/$JOB_NAME.N/$JOB_NAME.log
+            SCRATCH_LOG="$SCRATCH_BASE/${JOB_NAME}/${JOB_NAME}.log"
+            if [[ ! -f "$SCRATCH_LOG" ]]; then
+                SCRATCH_LOG=$(ls -t "$SCRATCH_BASE/${JOB_NAME}."*"/${JOB_NAME}.log" 2>/dev/null | head -1) || true
+            fi
+            if [[ -f "$SCRATCH_LOG" ]]; then
+                PROGRESS_LINE=$(grep 'Chemical time:' "$SCRATCH_LOG" 2>/dev/null | tail -1) || true
+                if [[ -n "$PROGRESS_LINE" ]] && [[ "$PROGRESS_LINE" != "$LAST_PROGRESS" ]]; then
+                    CHEM_TIME=$(echo "$PROGRESS_LINE" | grep -oP 'Chemical time:\s+\K[0-9.]+')
+                    NS_DAY=$(echo "$PROGRESS_LINE" | grep -oP 'ns/day:\s+\K[0-9.]+')
+                    PCT=$(awk -v t="$CHEM_TIME" -v total="$TOTAL_PS" 'BEGIN{printf "%.0f", t/total*100}')
+                    [[ ${PCT:-0} -gt 100 ]] && PCT=100
+                    BAR_LEN=30
+                    FILLED=$(( PCT * BAR_LEN / 100 ))
+                    EMPTY=$(( BAR_LEN - FILLED ))
+                    BAR=$(printf "%${FILLED}s" | tr ' ' '=')$(printf "%${EMPTY}s" | tr ' ' '-')
+                    printf "\r  [%s] %3d%% | %s/%s ps | %s ns/day" \
+                        "$BAR" "$PCT" "$CHEM_TIME" "$TOTAL_PS" "${NS_DAY:-N/A}"
+                    LAST_PROGRESS="$PROGRESS_LINE"
+                fi
+            fi
+
+            # ── Status check ──
             STATUS=$("$JOBCTL" -list "$JOB_ID" 2>/dev/null | grep "$JOB_ID" | head -1)
             if echo "$STATUS" | grep -qE "exited|finished|died|killed|cancelled"; then
                 EXIT_LINE=$("$JOBCTL" -list "$JOB_ID" 2>/dev/null | grep "$JOB_ID" | head -1)
-                log "Job finished: $(echo "$EXIT_LINE" | awk '{print $4, $7}')"
+                STATUS_WORD=$(echo "$EXIT_LINE" | awk '{print $4}')
+                if [[ "$STATUS_WORD" =~ ^(died|killed|cancelled)$ ]]; then
+                    EXIT_CODE=1
+                    echo ""
+                    log "Job $STATUS_WORD — check ${JOB_NAME}_multisim.log for details"
+                else
+                    EXIT_CODE=0
+                    echo ""
+                    log "Job finished successfully"
+                fi
                 break
             fi
             if [[ -z "$STATUS" ]]; then
-                # Job record may have been cleaned up — it's done
+                echo ""
                 log "Job completed (record cleaned)"
                 break
             fi
             if [[ $ELAPSED_WAIT -ge $TIMEOUT ]]; then
+                echo ""
                 warn "Timeout after ${TIMEOUT}s — job may still be running"
                 break
             fi
@@ -425,7 +628,6 @@ else
         done
     else
         log "Waiting for output files to appear..."
-        # Fallback: wait for .ene file
         for i in $(seq 1 120); do
             if [[ -f "${JOB_NAME}.ene" ]]; then
                 sleep 3
@@ -434,7 +636,6 @@ else
             sleep 5
         done
     fi
-    EXIT_CODE=0
 fi
 
 END_TIME=$(date +%s)
