@@ -1,0 +1,251 @@
+; Force field for LiFSI/DME system
+; Based on OPLS-AA with literature parameters for FSI-
+;
+; References:
+;   Jorgensen et al., JACS 118, 11225 (1996) - OPLS-AA
+;   Canongia Lopes & Pádua, JPCB 110, 19586 (2006) - ionic liquids
+;   Borodin, JPCB 113, 11463 (2009) - LiFSI parameters
+;   Shimizu et al., JPCB 119, 8961 (2015) - FSI- parameters
+
+[ defaults ]
+; nbfunc comb-rule gen-pairs fudgeLJ fudgeQQ
+    1      3        yes      0.5     0.5
+
+#include "ffnonbonded.itp"
+#include "ffbonded.itp"
+
+; ============================================================
+; Custom atom types (not in standard OPLS-AA)
+; We'll use existing OPLS types where possible
+; ============================================================
+
+; Li+ - use opls_406 (already defined)
+; FSI- uses:
+;   S: opls_035 (sulfide S) modified - actually use opls_038
+;   O: opls_018 (carbonyl O) - for S=O
+;   N: opls_040 (amine N) - for N-SO2
+;   F: opls_164 (F in trifluoroethanol)
+;
+; DME uses:
+;   CH3-O: opls_181
+;   CH2-O: opls_182  
+;   O: opls_180 (dialkyl ether)
+;   H: opls_140 (alkane H)
+;   H on C-O: opls_185
+
+; ============================================================
+; DME (1,2-dimethoxyethane) - CH3-O-CH2-CH2-O-CH3
+; ============================================================
+[ moleculetype ]
+; name       nrexcl
+DME          3
+
+[ atoms ]
+; id  type   resnr residu name atname cgnr charge   mass
+  1  opls_181  1   DME    C1      1   0.110   15.03500 ; CH3-O
+  2  opls_185  1   DME    H1A     1   0.030    1.00800 ; H on C-O
+  3  opls_185  1   DME    H1B     1   0.030    1.00800 ; H on C-O
+  4  opls_185  1   DME    H1C     1   0.030    1.00800 ; H on C-O
+  5  opls_180  1   DME    O1      2  -0.400   15.99940 ; ether O
+  6  opls_182  1   DME    C2      3   0.140   14.02700 ; CH2-O
+  7  opls_185  1   DME    H2A     3   0.030    1.00800 ; H on C-O
+  8  opls_185  1   DME    H2B     3   0.030    1.00800 ; H on C-O
+  9  opls_182  1   DME    C3      4   0.140   14.02700 ; CH2-O
+ 10  opls_185  1   DME    H3A     4   0.030    1.00800 ; H on C-O
+ 11  opls_185  1   DME    H3B     4   0.030    1.00800 ; H on C-O
+ 12  opls_180  1   DME    O2      5  -0.400   15.99940 ; ether O
+ 13  opls_181  1   DME    C4      6   0.110   15.03500 ; CH3-O
+ 14  opls_185  1   DME    H4A     6   0.030    1.00800 ; H on C-O
+ 15  opls_185  1   DME    H4B     6   0.030    1.00800 ; H on C-O
+ 16  opls_185  1   DME    H4C     6   0.030    1.00800 ; H on C-O
+
+[ bonds ]
+; ai  aj  funct   r           k
+  1   2   1       0.1090      284512.0  ; C-H
+  1   3   1       0.1090      284512.0  ; C-H
+  1   4   1       0.1090      284512.0  ; C-H
+  1   5   1       0.1410      267776.0  ; C-O
+  5   6   1       0.1410      267776.0  ; O-C
+  6   7   1       0.1090      284512.0  ; C-H
+  6   8   1       0.1090      284512.0  ; C-H
+  6   9   1       0.1529      224262.4  ; C-C
+  9  10   1       0.1090      284512.0  ; C-H
+  9  11   1       0.1090      284512.0  ; C-H
+  9  12   1       0.1410      267776.0  ; C-O
+ 12  13   1       0.1410      267776.0  ; O-C
+ 13  14   1       0.1090      284512.0  ; C-H
+ 13  15   1       0.1090      284512.0  ; C-H
+ 13  16   1       0.1090      284512.0  ; C-H
+
+[ pairs ]
+; 1-4 interactions
+  1   9   1
+  2   5   1
+  2   6   1
+  3   5   1
+  3   6   1
+  4   5   1
+  4   6   1
+  5   7   1
+  5   8   1
+  5   9   1
+  5  13   1
+  6  10   1
+  6  11   1
+  6  12   1
+  7   9   1
+  8   9   1
+  9  14   1
+  9  15   1
+  9  16   1
+ 10  12   1
+ 11  12   1
+ 12  14   1
+ 12  15   1
+ 12  16   1
+
+[ angles ]
+; ai  aj  ak  funct   theta       k
+  2   1   3   1       107.8       276.144  ; H-C-H
+  2   1   4   1       107.8       276.144  ; H-C-H
+  2   1   5   1       109.5       292.880  ; H-C-O
+  3   1   4   1       107.8       276.144  ; H-C-H
+  3   1   5   1       109.5       292.880  ; H-C-O
+  4   1   5   1       109.5       292.880  ; H-C-O
+  1   5   6   1       109.5       502.080  ; C-O-C
+  5   6   7   1       109.5       292.880  ; O-C-H
+  5   6   8   1       109.5       292.880  ; O-C-H
+  5   6   9   1       109.5       418.400  ; O-C-C
+  7   6   8   1       107.8       276.144  ; H-C-H
+  7   6   9   1       109.5       292.880  ; H-C-C
+  8   6   9   1       109.5       292.880  ; H-C-C
+  6   9  10   1       109.5       292.880  ; C-C-H
+  6   9  11   1       109.5       292.880  ; C-C-H
+  6   9  12   1       109.5       418.400  ; C-C-O
+ 10   9  11   1       107.8       276.144  ; H-C-H
+ 10   9  12   1       109.5       292.880  ; H-C-O
+ 11   9  12   1       109.5       292.880  ; H-C-O
+  9  12  13   1       109.5       502.080  ; C-O-C
+ 12  13  14   1       109.5       292.880  ; O-C-H
+ 12  13  15   1       109.5       292.880  ; O-C-H
+ 12  13  16   1       109.5       292.880  ; O-C-H
+ 14  13  15   1       107.8       276.144  ; H-C-H
+ 14  13  16   1       107.8       276.144  ; H-C-H
+ 15  13  16   1       107.8       276.144  ; H-C-H
+
+[ dihedrals ]
+; ai  aj  ak  al  funct   phi0      k     mult
+; C-O-C-H (improper-like, use proper)
+  1   5   6   7   3       0.0       0.650  3  ; X-O-C-X
+  1   5   6   8   3       0.0       0.650  3
+  1   5   6   9   3       0.0       0.650  3
+  5   6   9  12   3       0.0       1.300  3  ; O-C-C-O
+  5   6   9  10   3       0.0       0.650  3
+  5   6   9  11   3       0.0       0.650  3
+  6   9  12  13   3       0.0       0.650  3  ; C-C-O-C
+  9  12  13  14   3       0.0       0.650  3
+  9  12  13  15   3       0.0       0.650  3
+  9  12  13  16   3       0.0       0.650  3
+ 13  12   9   6   3       0.0       1.300  3
+  ; O-C-C-O proper dihedral (important for DME)
+  5   6   9  12   3       0.0       1.882  1  ; trans
+  5   6   9  12   3       0.0      -0.879  2  ; gauche
+  5   6   9  12   3       0.0       0.945  3  ; trans correction
+  5   6   9  12   3       0.0       0.000  4
+
+; ============================================================
+; FSI- (bis(fluorosulfonyl)imide) - N(SO2F)2-
+; ============================================================
+[ moleculetype ]
+; name       nrexcl
+FSI          3
+
+[ atoms ]
+; id  type   resnr residu name atname cgnr charge   mass
+  1  opls_040  1   FSI     N       1  -0.650   14.00670 ; N central
+  2  opls_038  1   FSI     S1      2   1.200   32.06000 ; S
+  3  opls_018  1   FSI     O1A     3  -0.600   15.99940 ; S=O
+  4  opls_018  1   FSI     O1B     3  -0.600   15.99940 ; S=O
+  5  opls_164  1   FSI     F1      4  -0.175   18.99840 ; S-F
+  6  opls_038  1   FSI     S2      5   1.200   32.06000 ; S
+  7  opls_018  1   FSI     O2A     6  -0.600   15.99940 ; S=O
+  8  opls_018  1   FSI     O2B     6  -0.600   15.99940 ; S=O
+  9  opls_164  1   FSI     F2      7  -0.175   18.99840 ; S-F
+
+; Total charge: -0.650 + 2*(1.200) + 4*(-0.600) + 2*(-0.175) = -1.0
+; Check: -0.650 + 2.400 - 2.400 - 0.350 = -1.000 ✓
+
+[ bonds ]
+; ai  aj  funct   r           k
+  1   2   1       0.1570      251040.0  ; N-S
+  1   6   1       0.1570      251040.0  ; N-S
+  2   3   1       0.1430      439320.0  ; S=O
+  2   4   1       0.1430      439320.0  ; S=O
+  2   5   1       0.1580      284512.0  ; S-F
+  6   7   1       0.1430      439320.0  ; S=O
+  6   8   1       0.1430      439320.0  ; S=O
+  6   9   1       0.1580      284512.0  ; S-F
+
+[ pairs ]
+; 1-4 interactions
+  1   3   1
+  1   4   1
+  1   5   1
+  1   7   1
+  1   8   1
+  1   9   1
+  2   6   1
+  2   7   1
+  2   8   1
+  2   9   1
+  3   5   1
+  3   6   1
+  4   5   1
+  4   6   1
+  5   6   1
+  6   3   1
+  6   4   1
+
+[ angles ]
+; ai  aj  ak  funct   theta       k
+  2   1   6   1       126.0       585.760  ; S-N-S
+  1   2   3   1       106.0       585.760  ; N-S=O
+  1   2   4   1       106.0       585.760  ; N-S=O
+  1   2   5   1       100.0       418.400  ; N-S-F
+  3   2   4   1       118.0       669.440  ; O=S=O
+  3   2   5   1       106.0       418.400  ; O=S-F
+  4   2   5   1       106.0       418.400  ; O=S-F
+  1   6   7   1       106.0       585.760  ; N-S=O
+  1   6   8   1       106.0       585.760  ; N-S=O
+  1   6   9   1       100.0       418.400  ; N-S-F
+  7   6   8   1       118.0       669.440  ; O=S=O
+  7   6   9   1       106.0       418.400  ; O=S-F
+  8   6   9   1       106.0       418.400  ; O=S-F
+
+[ dihedrals ]
+; ai  aj  ak  al  funct   phi0      k     mult
+; N-S-N-S proper dihedral
+  6   1   2   3   3       0.0       0.000  1
+  6   1   2   4   3       0.0       0.000  1
+  6   1   2   5   3       0.0       0.000  1
+  2   1   6   7   3       0.0       0.000  1
+  2   1   6   8   3       0.0       0.000  1
+  2   1   6   9   3       0.0       0.000  1
+  ; S-N-S-O proper dihedral (important for FSI- flexibility)
+  3   2   1   6   3       0.0       0.000  1
+  4   2   1   6   3       0.0       0.000  1
+  5   2   1   6   3       0.0       0.000  1
+  7   6   1   2   3       0.0       0.000  1
+  8   6   1   2   3       0.0       0.000  1
+  9   6   1   2   3       0.0       0.000  1
+
+; ============================================================
+; Li+ ion
+; ============================================================
+[ moleculetype ]
+; name       nrexcl
+LI          1
+
+[ atoms ]
+; id  type   resnr residu name atname cgnr charge   mass
+  1  opls_406  1   LI      LI      1   1.000    6.94100

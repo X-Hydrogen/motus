@@ -1,0 +1,41 @@
+; NPT equilibration
+integrator               = md
+nsteps                   = 250000      ; 500 ps
+dt                       = 0.002       ; 2 fs
+nstenergy                = 100
+nstlog                   = 100
+nstxout-compressed       = 5000        ; frame every 10 ps
+
+; Temperature coupling
+tcoupl                   = v-rescale
+tc-grps                  = system
+tau_t                    = 0.1
+ref_t                    = 333.15
+
+; Pressure coupling
+pcoupl                   = Berendsen
+pcoupltype               = isotropic
+tau_p                    = 1.0
+ref_p                    = 1.0
+compressibility          = 4.5e-5
+
+; Cutoffs
+cutoff-scheme            = Verlet
+nstlist                  = 10
+ns_type                  = grid
+rlist                    = 1.2
+rcoulomb                 = 1.2
+rvdw                     = 1.2
+
+; PME electrostatics
+coulombtype              = PME
+pme_order                = 4
+fourierspacing           = 0.12
+
+; Constraints
+constraints              = h-bonds
+constraint-algorithm     = LINCS
+lincs-order              = 4
+
+; Periodic boundaries
+pbc                      = xyz

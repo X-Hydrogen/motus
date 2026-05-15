@@ -1,0 +1,37 @@
+; Methane (CH4) - All-atom OPLS-AA
+; C: opls_962 (CT, q=+0.240), H: opls_140 (HC, q=+0.060)
+; Charges sum: +0.240 + 4×(-0.075) = -0.060... 
+
+; Actually for neutral all-atom methane, standard OPLS uses:
+; C: q=0.000 (or slightly negative in some parametrizations)
+; H: q=0.000 for united-atom mapped to all-atom
+; 
+; Using TraPPE/OPLS-style: C q=-0.240, H q=+0.060 (total = 0.000)
+; But opls_962 has q=+0.240 built in, so let's just use a simple approach:
+
+[ moleculetype ]
+CH4     3
+
+[ atoms ]
+; nr  type       resnr  residue  atom   cgnr  charge     mass
+   1  opls_962    1      CH4      C      1     0.000      12.011
+   2  opls_140    1      CH4      H1     2     0.000       1.008
+   3  opls_140    1      CH4      H2     3     0.000       1.008
+   4  opls_140    1      CH4      H3     4     0.000       1.008
+   5  opls_140    1      CH4      H4     5     0.000       1.008
+
+[ bonds ]
+; ai  aj  funct  r(nm)       K(kJ/mol/nm^2)
+   1   2    1    0.1090      284512.0
+   1   3    1    0.1090      284512.0
+   1   4    1    0.1090      284512.0
+   1   5    1    0.1090      284512.0
+
+[ angles ]
+; ai  aj  ak  funct  theta(deg)  K(kJ/mol/rad^2)
+   2   1   3    1     109.5      276.144
+   2   1   4    1     109.5      276.144
+   2   1   5    1     109.5      276.144
+   3   1   4    1     109.5      276.144
+   3   1   5    1     109.5      276.144
+   4   1   5    1     109.5      276.144
