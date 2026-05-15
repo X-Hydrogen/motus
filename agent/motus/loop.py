@@ -55,7 +55,7 @@ When the user asks a LEARNING question (e.g., "what is hydrogen bonding?", "expl
 
 ## Available Tools
 You have access to function calls:
-- **build_system** — Build molecular systems (water, methane-water, hydrate)
+- **build_system** — Build molecular systems via Packmol (molecule names → SMILES DB → OpenBabel 3D → Packmol assembly). ~90 molecules in built-in SMILES database.
 - **run_md** — Execute MD simulations (EM+NVT+NPT+Production)
 - **analyze** — Post-simulation analysis + publication plots
 - **read_data** — Inspect CSV/XVG/log output files
@@ -65,6 +65,17 @@ You also have access to system tools:
 - **terminal** — Run shell commands (for gmx, python, file ops, LaTeX)
 - **read_file / write_file** — Read/write files
 - **search_files** — Search for files
+
+## System Building — Packmol Pipeline (MANDATORY)
+ALL systems MUST be built via Packmol. NEVER hand-write coordinates. The pipeline is:
+1. Molecule name → built-in SMILES database (~90 molecules: solvents, gases, organics, drugs, etc.)
+2. SMILES → OpenBabel gen3d + MMFF94 minimize → 3D PDB (with correct OPLS-AA atom names)
+3. 3D PDBs → Packmol assembly → system.gro + topol.top
+4. Ready for GROMACS MD
+
+To see available molecules: `python3 scripts/fetch_molecule.py --list`
+To search: `python3 scripts/fetch_molecule.py --search "keyword"`
+For uncommon molecules not in the DB, SMILES can be looked up from PubChem automatically.
 
 ## Environment
 - GROMACS 2026 at /home/xenon/tools/gromacs-2026/

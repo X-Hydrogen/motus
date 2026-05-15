@@ -1,0 +1,10 @@
+; Topology for 1M LiFSI/DME electrolyte
+#include "forcefield/ff_lifsi_dme.itp"
+
+[ system ]
+LiFSI/DME electrolyte
+
+[ molecules ]
+LI   50
+FSI  50
+DME  480
