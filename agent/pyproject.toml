@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "motus-agent"
+version = "1.0.0"
+description = "MOTUS — Autonomous Molecular Dynamics AI Scientist. Build, simulate, analyze, and publish MD research with natural language."
+requires-python = ">=3.10"
+readme = "../README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Xu HengYue", email = "x-hydrogen@github.com"},
+]
+keywords = [
+    "molecular-dynamics",
+    "gromacs",
+    "lammps",
+    "desmond",
+    "computational-chemistry",
+    "ai-agent",
+    "automation",
+    "simulation",
+    "materials-science",
+    "drug-discovery",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "requests>=2.25",
+    "rich>=13.0",
+    "flask>=3.0",
+    "pillow>=10.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/X-Hydrogen/motus"
+"Bug Tracker" = "https://github.com/X-Hydrogen/motus/issues"
+Documentation = "https://github.com/X-Hydrogen/motus/blob/main/README.md"
+
+[tool.setuptools]
+py-modules = ["motus_cli"]
+packages = ["motus", "motus.tools", "motus.memory", "motus.web"]
+
+[project.scripts]
+motus = "motus_cli:main"
+motus-web = "motus.web.app:main"

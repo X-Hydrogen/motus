@@ -2,18 +2,22 @@
   <img src="docs/images/MOTUS-top.png" alt="MOTUS" width="800">
 </p>
 
-<h3 align="center"><em>Molecular Dynamics Automation Agent — From Atoms to Insights, in One Command</em></h3>
+<h3 align="center"><em>Molecular Dynamics Automation — From Idea to Publication, in Natural Language</em></h3>
 
 <p align="center">
-  <strong>Version 0.0.3</strong> &nbsp;|&nbsp;
-  Desmond MD ✅ &bull; GROMACS ✅ &bull; LAMMPS ✅
+  <strong>Version 1.0.0</strong> &nbsp;|&nbsp;
+  Desmond MD ✅ &bull; GROMACS ✅ &bull; LAMMPS ✅ &bull; AI Agent ✅
 </p>
 
 ---
 
 ## What is MOTUS?
 
-**MOTUS** is a unified molecular simulation analysis platform that transforms raw MD trajectory data into **publication-ready figures and quantitative insights** — automatically, across three industry-standard engines.
+**MOTUS** is a dual-purpose molecular dynamics platform:
+
+1. **🧬 MOTUS Agent** — An AI scientist that designs, executes, and analyzes MD simulations through natural conversation. Just describe your research question in plain language.
+
+2. **⚡ MOTUS Scripts** — A unified cross-engine analysis pipeline that transforms raw MD trajectory data into publication-ready figures — automatically, across Desmond, GROMACS, and LAMMPS.
 
 ### Why Molecular Dynamics Matters
 
@@ -27,7 +31,78 @@ Molecular dynamics simulations are a cornerstone of modern science and engineeri
 
 Across all these fields, the bottleneck is the same: **turning terabytes of simulation data into interpretable, publication-quality results**. MOTUS eliminates this bottleneck.
 
-### What MOTUS Does
+---
+
+## 🧬 MOTUS Agent — AI Scientist
+
+### Quick Start
+
+```bash
+# One-shot research
+motus "Study methane hydrate formation at 260K and 200 bar"
+
+# Interactive mode
+motus
+
+# Web interface
+motus-web --host 0.0.0.0
+
+# Resume a session
+motus --session 20260514_215205
+```
+
+The Agent will:
+1. **Understand** your research question
+2. **Build** the molecular system (water box, methane-water, hydrate...)
+3. **Simulate** with GROMACS or LAMMPS (EM → NVT → NPT → Production)
+4. **Analyze** — energy, RDF, RMSD, H-bonds, density, clustering...
+5. **Render** publication-quality structure images with VMD
+6. **Interpret** results and suggest next steps
+7. **Teach** — ask MD fundamentals and get interactive explanations
+
+### Features
+
+- **Natural Language Interface** — no scripting, no config files
+- **Dual Role** — research scientist + passionate professor
+- **Auto-detect** — knows GROMACS, LAMMPS, VMD, GPU paths
+- **Session Memory** — all conversations saved, resumable
+- **Web Dashboard** — sci-fi themed, mobile-responsive, SSE real-time streaming
+- **LLM Backend** — DeepSeek (configurable)
+
+### Architecture
+
+```
+Hello World
+       │
+       ▼
+  ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌───────────┐
+  │ Build   │───▶│ Run MD   │───▶│ Analyze  │───▶│ Interpret │
+  │ System  │    │ 500ps    │    │ + Plots  │    │ + Report  │
+  └─────────┘    └──────────┘    └──────────┘    └───────────┘
+       │              │               │               │
+       ▼              ▼               ▼               ▼
+  gmx solvate    gmx mdrun      RDF, RMSD,      LaTeX Paper
+  insert-mol     GPU CUDA       H-bonds, E      PDF Output
+```
+
+### Web Interface
+
+<p align="center">
+  <em>Dark sci-fi themed dashboard · Real-time tool call streaming · Mobile responsive · Canvas particle animations</em>
+</p>
+
+Access MOTUS from anywhere:
+```bash
+# Start web server
+motus-web --host 0.0.0.0 --port 8848
+
+# Public tunnel (Cloudflare)
+cloudflared tunnel --url http://localhost:8848
+```
+
+---
+
+## ⚡ MOTUS Scripts — Cross-Engine Analysis
 
 One command. Three engines. Fifteen analysis types. Zero manual plotting.
 
@@ -40,15 +115,11 @@ cd desmond_md_job_my-system
 # → < 2 minutes
 ```
 
-**New in v0.0.3:** Auto-detect current working directory — no folder paths needed. Just `cd` into your job folder and run. Supports Maestro output from both Windows (CRLF) and Linux, with automatic line-ending conversion.
-
-<p align="center">
-  <img src="docs/images/MOTUS-middle.png" alt="MOTUS Overview" width="700">
-</p>
+**New in v1.0.0:** Autonomous AI scientist — describe your research in natural language and MOTUS does everything. Also: LAMMPS reactive MD, CWD auto-detection for all engines.
 
 ---
 
-## Quick Start
+## Quick Start — Engine Scripts
 
 ### Desmond
 
@@ -128,7 +199,7 @@ bash ../motus/desmond/desmond-analysis.sh --fig-only
 
 **Requirements:**
 - Linux; Schrödinger Suite (for Desmond), GROMACS, LAMMPS
-- Python 3.8+ with `numpy`, `matplotlib`, `scipy`
+- Python 3.10+ with `numpy`, `matplotlib`, `scipy`
 - GPU recommended
 
 ---
@@ -138,8 +209,9 @@ bash ../motus/desmond/desmond-analysis.sh --fig-only
 | Feature | Desmond | GROMACS | LAMMPS |
 |:--------|:-------:|:-------:|:------:|
 | **MD Production** (EM + Equil + Prod) | ✅ | ✅ | ✅ |
+| **AI Agent** (Natural Language → Simulation) | — | ✅ | — |
 | **Cross-Platform Maestro** (Win/Linux CRLF auto-fix) | ✅ | — | — |
-| **CWD Auto-Detection** (no folder args) | ✅ | — | — |
+| **CWD Auto-Detection** (no folder args) | ✅ | ✅ | ✅ |
 | **Real-Time Progress Bar** | ✅ | — | — |
 | **Metadynamics** (Well-Tempered / Standard) | ✅ (native) | ✅ (PLUMED) | ✅ (COLVARS) |
 | **Umbrella Sampling + WHAM** | — | ✅ | — |
@@ -365,6 +437,28 @@ motus/
 │   ├── desmond/                   ← Desmond figure gallery (+ README)
 │   ├── gromacs/                   ← GROMACS figure gallery (+ README)
 │   └── lammps/                    ← LAMMPS figure gallery (+ README)
+├── agent/                         ← 🧬 MOTUS Agent (AI Scientist)
+│   ├── AGENT.md                   ← Developer guide
+│   ├── pyproject.toml             ← v1.0.0 package
+│   ├── motus_cli.py               ← CLI entry point
+│   ├── motus/                     ← Core agent package
+│   │   ├── __init__.py            ← Version info
+│   │   ├── loop.py                ← LLM conversation loop
+│   │   ├── registry.py            ← Tool registry
+│   │   ├── memory/store.py        ← Session persistence
+│   │   ├── tools/                 ← MD tools
+│   │   │   ├── md_build.py        ← build_system
+│   │   │   ├── md_run.py          ← run_md
+│   │   │   ├── md_analyze.py      ← analyze
+│   │   │   ├── md_render.py       ← render_system
+│   │   │   ├── md_read.py         ← read_data
+│   │   │   └── md_system.py       ← terminal, file ops
+│   │   └── web/                   ← Web interface
+│   │       ├── app.py             ← Flask server (port 8848)
+│   │       └── tunnel.py          ← Public tunnel helper
+│   └── scripts/
+│       ├── build_hydrate_system.py
+│       └── tunnel.sh
 ├── desmond/                       ← Desmond engine scripts
 │   ├── desmond-md.sh              ← MD job submission & monitoring
 │   ├── desmond-analysis.sh        ← Post-processing pipeline (15 modules)
@@ -432,12 +526,14 @@ motus/
 | COLVARS MetaD (LAMMPS) | ✅ |
 | Umbrella sampling + WHAM (GROMACS) | ✅ |
 | Cross-engine cluster plots (Desmond-style) | ✅ |
-| **Cross-platform Maestro (Win/Linux, CWD auto-detect, progress bar)** | ✅ v0.0.3 |
-| **LAMMPS reactive MD — ReaxFF + fix bond/react + Arrhenius fitting** | ✅ v0.0.3 |
+| Cross-platform Maestro (Win/Linux, CWD auto-detect, progress bar) | ✅ v0.0.3 |
+| LAMMPS reactive MD — ReaxFF + fix bond/react + Arrhenius fitting | ✅ v0.0.3 |
+| **🧬 MOTUS Agent — Autonomous AI Scientist** | ✅ v1.0.0 |
+| **🌐 Web Interface — Sci-fi dashboard with SSE streaming** | ✅ v1.0.0 |
 | Solvent structure analysis (sorient/spatial/h2order) | 🚧 Planned |
 | Electrostatic Potential (ESP) | 🚧 Planned |
-| Unified MOTUS CLI | 🚧 Planned |
-| AI-driven analysis & interpretation | 🚧 Planned |
+| Multi-agent collaborative research | 🚧 Planned |
+| LLM-driven iterative experiment design | 🚧 Planned |
 
 ---
 
@@ -452,7 +548,7 @@ MIT — see [LICENSE](LICENSE) file.
 If you use MOTUS in your research, please cite:
 
 ```
-MOTUS: Molecular Dynamics Automation Agent. Version 0.0.3.
+MOTUS: Molecular Dynamics Automation Agent. Version 1.0.0.
 https://github.com/X-Hydrogen/motus
 ```
 
