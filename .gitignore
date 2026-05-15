@@ -51,3 +51,14 @@ env/
 # MOTUS test artifacts
 *.pdb
 motus-test/
+
+# MOTUS Agent
+agent/venv/
+agent/build/
+agent/dist/
+agent/*.egg-info/
+agent/motus_agent.egg-info/
+agent/workspaces/
+agent/.env
+.motus/sessions/
+
