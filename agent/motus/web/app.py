@@ -324,13 +324,15 @@ canvas#bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:.
     <button class="btn-new" onclick="newSession()" title="New Session">＋</button>
     <input id="input" placeholder="Ask MOTUS to do molecular dynamics research..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)send()" autofocus>
     <button id="sendBtn" onclick="send()">Send →</button>
+    <button id="stopBtn" onclick="stopTask()" style="display:none;background:linear-gradient(135deg,#661a1a,#552222);color:#f88;border:none">⏹ Stop</button>
   </div>
   <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
 </div>
 
 <script>
 let sessionId='';
-const EMOJI={build_system:'🏗️',run_md:'⚡',analyze:'📊',read_data:'📖',render_system:'🎨',terminal:'💻',read_file:'📄',write_file:'✏️',search_files:'🔍'};
+const EMOJI={build_system:'🏗️',run_md:'⚡',analyze:'📊',read_data:'📖',render_system:'🎨',terminal:'💻',read_file:'📄',write_file:'✏️',search_files:'🔍',comprehensive_analysis:'🔬',generate_report:'📝'};
+const TOOL_LABEL={build_system:'Build System',run_md:'Run MD Simulation',comprehensive_analysis:'Comprehensive Analysis',generate_report:'Generate Report',analyze:'Analyze Data',render_system:'Render Structure',read_data:'Read Data',terminal:'Execute Command',read_file:'Read File',write_file:'Write File',search_files:'Search Files'};
 
 // Particle background
 (function(){
@@ -391,15 +393,15 @@ d.innerHTML='<div class="sender">You</div><div class="bubble">'+esc(t)+'</div>';
 document.getElementById('chat').appendChild(d);scrollDown()}
 
 function addToolMsg(name,args,result,iter){
-rmWelcome();
+const emoji=EMOJI[name]||'🔧';
+const label=TOOL_LABEL[name]||name;
 const d=document.createElement('div');d.className='tool-event';
-d.innerHTML='<div class="te-icon">'+(EMOJI[name]||'🔧')+'</div>'+
-'<div class="te-body"><div class="te-name">'+esc(name)+'<span class="te-args">'+(args||'')+'</span></div>'+
-(result?'<div class="te-result">'+esc(result)+'</div>':'')+'</div>';
+d.innerHTML='<div class="te-icon">'+emoji+'</div>'+
+'<div class="te-body"><div class="te-name">'+esc(label)+'<span class="te-args">'+(args||'')+'</span></div>'+
+'<div class="te-result">'+(result||'')+'</div></div>';
 document.getElementById('chat').appendChild(d);
-// Update active tools sidebar
 const at=document.getElementById('activeTools');
-at.innerHTML='<div class="tool-item active"><span class="ti-icon">'+(EMOJI[name]||'🔧')+'</span><span class="ti-name">'+esc(name)+'</span></div>';
+at.innerHTML='<div class="tool-item active"><span class="ti-icon">'+emoji+'</span><span class="ti-name">'+esc(label)+'</span></div>';
 scrollDown()}
 
 function addBotMsg(t){
@@ -412,24 +414,196 @@ scrollDown()}
 
 function addPulse(s,err){
 const d=document.createElement('div');d.className='status-pulse'+(err?' error':'');
-d.innerHTML='<span class="pulse-ring"><span class="pulse-dot"></span>'+esc(s)+'</span>';
+d.innerHTML='<span class="pulse-ring"><span class="pulse-dot"></span>'+s+'</span>';
 d.id='pulse-'+Date.now();document.getElementById('chat').appendChild(d);scrollDown();return d}
+
+// Progress bar for long-running operations
+let _progressBar=null;
+function showProgress(label){
+ if(_progressBar)updateProgress(label);
+ else{
+  _progressBar=document.createElement('div');
+  _progressBar.className='status-pulse';
+  _progressBar.id='progress-bar';
+  _progressBar.innerHTML='<span class="pulse-ring"><span class="pulse-dot"></span><span id="progLabel">'+label+'</span></span>'+
+   '<div style="margin-top:6px;height:3px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden">'+
+   '<div id="progFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),#7c4dff);border-radius:3px;transition:width .5s"></div></div>';
+  document.getElementById('chat').appendChild(_progressBar);
+  scrollDown();
+ }
+}
+function updateProgress(label){
+ const el=document.getElementById('progLabel');if(el)el.textContent=label;
+ const fill=document.getElementById('progFill');if(fill){
+  const w=parseFloat(fill.style.width)||0;
+  const nw=Math.min(w+Math.random()*15+5,92);
+  fill.style.width=nw+'%';
+ }
+}
+function finishProgress(success){
+ if(_progressBar){
+  const fill=document.getElementById('progFill');if(fill)fill.style.width='100%';
+  const label=document.getElementById('progLabel');
+  if(label)label.textContent=success?'✅ Complete':'❌ Failed';
+  setTimeout(()=>{if(_progressBar){_progressBar.remove();_progressBar=null}},2000);
+ }
+}
+function removeProgress(){if(_progressBar){_progressBar.remove();_progressBar=null}}
+
+// Streaming message: accumulates text tokens in real-time (typewriter effect)
+let _streamMsg=null;
+let _streamBuf='';
+function streamText(chunk){
+ if(!_streamMsg){
+  rmWelcome();
+  _streamMsg=document.createElement('div');
+  _streamMsg.className='msg bot';
+  _streamMsg.innerHTML='<div class="sender">🧬 MOTUS</div><div class="bubble" id="streamBubble"></div>';
+  document.getElementById('chat').appendChild(_streamMsg);
+  _streamBuf='';
+ }
+ _streamBuf+=chunk;
+ document.getElementById('streamBubble').innerHTML=mdToHtml(_streamBuf);
+ scrollDown();
+}
+function finalizeStream(text){
+ if(!text&&!_streamBuf)return;
+ const content=text||_streamBuf;
+ if(_streamMsg){
+  document.getElementById('streamBubble').innerHTML=mdToHtml(content);
+ }else{
+  addBotMsg(content);
+ }
+ _streamMsg=null;_streamBuf='';
+ document.getElementById('activeTools').innerHTML='<div class="tool-item"><span class="ti-icon">✅</span><span class="ti-name">Complete</span></div>';
+}
+
+// File delivery card
+function addFileCard(path,filename,label,icon){
+ rmWelcome();
+ const d=document.createElement('div');
+ d.className='msg bot';
+ const isImg=filename.match(/\.(png|jpg|jpeg|webp)$/i);
+ d.innerHTML='<div class="sender">🧬 MOTUS</div><div class="bubble">'+
+  '<div style="display:flex;align-items:center;gap:10px;padding:4px 0">'+
+  '<span style="font-size:1.6em">'+(icon||'📎')+'</span>'+
+  '<div><div style="font-weight:600;color:var(--cyan);font-size:.85em">'+esc(label||'File')+'</div>'+
+  '<div style="font-size:.7em;color:var(--dim)">'+esc(filename)+'</div></div></div>'+
+  (isImg?'<img src="/api/files/'+esc(path)+'" style="max-width:100%;max-height:400px;border-radius:8px;margin-top:8px;cursor:pointer" onclick="window.open(\'/api/files/'+esc(path)+'\')">':'')+
+  '<div style="margin-top:8px"><a href="/api/files/'+esc(path)+'" download style="display:inline-block;background:linear-gradient(135deg,#1a4477,#1a3366);color:#c8ddf8;padding:8px 20px;border-radius:8px;text-decoration:none;font-size:.78em;font-weight:600">⬇ Download '+esc(filename)+'</a></div>'+
+  '</div>';
+ document.getElementById('chat').appendChild(d);
+ scrollDown();
+}
+
+let _abortController=null;
+
+async function stopTask(){
+ if(_abortController){
+  _abortController.abort();
+  _abortController=null;
+ }
+ // Also signal backend
+ try{await fetch('/api/abort/'+sessionId,{method:'POST'})}catch(e){}
+ removeProgress();finalizeStream();
+ const d=document.createElement('div');
+ d.className='status-pulse';
+ d.innerHTML='<span class="pulse-ring"><span style="color:var(--gold)">⏹️ Task stopped</span></span>';
+ document.getElementById('chat').appendChild(d);scrollDown();
+ document.getElementById('stopBtn').style.display='none';
+ document.getElementById('sendBtn').style.display='';
+ document.getElementById('input').disabled=false;
+}
 
 async function send(){
 const inp=document.getElementById('input'),txt=inp.value.trim();if(!txt)return;
-inp.value='';inp.disabled=true;document.getElementById('sendBtn').disabled=true;
-addUserMsg(txt);const pulse=addPulse('MOTUS is thinking...');
-const es=new EventSource('/api/chat/'+sessionId+'?message='+encodeURIComponent(txt));
-es.onmessage=function(e){
-pulse.remove();
-const d=JSON.parse(e.data);
-if(d.type==='tool')addToolMsg(d.tool_name,d.args_preview,d.result_preview,d.iteration);
-else if(d.type==='response'){addBotMsg(d.content);es.close()}
-else if(d.type==='error'){addPulse(d.content,true);es.close()}
-else if(d.type==='done')es.close()
-};
-es.onerror=function(){pulse.remove();es.close()};
-setTimeout(()=>{inp.disabled=false;document.getElementById('sendBtn').disabled=false;inp.focus()},500)}
+_lastMessage=txt;
+inp.value='';inp.disabled=true;
+document.getElementById('sendBtn').style.display='none';
+document.getElementById('stopBtn').style.display='';
+addUserMsg(txt);showProgress('🧠 MOTUS is thinking...');
+let hasResponse=false;
+
+try{
+_abortController=new AbortController();
+const resp=await fetch('/api/chat/'+sessionId,{
+ method:'POST',
+ headers:{'Content-Type':'application/json'},
+ body:JSON.stringify({message:txt}),
+ signal:_abortController.signal
+});
+if(!resp.ok){removeProgress();addPulse('Server error: '+resp.status,true);return}
+
+const reader=resp.body.getReader();
+const decoder=new TextDecoder();
+let buf='';
+while(true){
+ const{value,done}=await reader.read();
+ if(done)break;
+ buf+=decoder.decode(value,{stream:true});
+ while(buf.includes('\n')){
+  const idx=buf.indexOf('\n');
+  const line=buf.substring(0,idx).trim();
+  buf=buf.substring(idx+1);
+  if(!line||!line.startsWith('data: '))continue;
+  const jsonStr=line.substring(6);
+  try{
+   const d=JSON.parse(jsonStr);
+   if(d.type==='heartbeat'){
+    const label=document.getElementById('progLabel');
+    if(label&&!label.textContent.includes('Working'))label.textContent=label.textContent+' · still working...';
+   }else if(d.type==='stage'){
+    updateProgress(d.label);
+   }else if(d.type==='text'){
+    streamText(d.content);
+   }else if(d.type==='tool'){
+    finalizeStream();
+    addToolMsg(d.tool_name,d.args_preview,d.result_preview,d.iteration);
+    if(d.stage_hint)updateProgress(d.stage_hint);
+   }else if(d.type==='response'){
+    removeProgress();finalizeStream(d.content);hasResponse=true;
+   }else if(d.type==='error'){
+    removeProgress();finalizeStream();
+    const errDiv=document.createElement('div');
+    errDiv.className='status-pulse error';
+    errDiv.innerHTML='<span class="pulse-ring"><span class="pulse-dot"></span>❌ Error: '+esc(d.content)+'</span>'+
+     '<div style="margin-top:8px"><button onclick="retryLast()" style="background:rgba(255,82,82,.2);border:1px solid var(--red);color:var(--red);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:.72em">🔄 Retry</button></div>';
+    document.getElementById('chat').appendChild(errDiv);scrollDown();
+   }else if(d.type==='done'){
+    if(!hasResponse){removeProgress();finalizeStream()}
+   }else if(d.type==='file'){
+    addFileCard(d.path,d.filename,d.label,d.icon);
+   }
+  }catch(e){}
+ }
+}
+}catch(err){
+ if(err.name==='AbortError'){
+  // User clicked stop — handled by stopTask()
+ }else if(!hasResponse){
+  removeProgress();finalizeStream();
+  const errDiv=document.createElement('div');
+  errDiv.className='status-pulse error';
+  errDiv.innerHTML='<span class="pulse-ring"><span class="pulse-dot"></span>⚠️ Connection lost — the simulation may still be running</span>'+
+   '<div style="margin-top:8px;font-size:.65em;color:var(--dim)">The research task continues in background. Check results or start a new session.</div>'+
+   '<div style="margin-top:8px"><button onclick="retryLast()" style="background:rgba(255,183,77,.15);border:1px solid var(--gold);color:var(--gold);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:.72em">🔄 Retry</button></div>';
+  document.getElementById('chat').appendChild(errDiv);scrollDown();
+ }
+}
+_abortController=null;
+document.getElementById('stopBtn').style.display='none';
+document.getElementById('sendBtn').style.display='';
+document.getElementById('input').disabled=false;
+setTimeout(()=>document.getElementById('input').focus(),500)}
+
+let _lastMessage='';
+function retryLast(){
+ if(_lastMessage){document.getElementById('input').value=_lastMessage;send()}
+ else{
+  const msgs=document.querySelectorAll('.msg.user .bubble');
+  if(msgs.length>0){_lastMessage=msgs[msgs.length-1].textContent;document.getElementById('input').value=_lastMessage;send()}
+ }
+}
 
 function quickAsk(el){
 document.getElementById('input').value=el.dataset.q;send()}
@@ -469,10 +643,50 @@ def index():
 
 @app.route("/api/new_session")
 def new_session():
-    agent = MOTUSAgent()
+    import threading
+    abort_evt = threading.Event()
+    agent = MOTUSAgent(abort_event=abort_evt)
     with _lock:
-        _sessions[agent.memory.session_id] = {"agent": agent, "events": Queue(), "running": False}
+        _sessions[agent.memory.session_id] = {
+            "agent": agent, 
+            "events": Queue(), 
+            "running": False,
+            "abort": abort_evt,
+        }
     return jsonify({"session_id": agent.memory.session_id})
+
+@app.route("/api/abort/<sid>", methods=["POST"])
+def abort_session(sid):
+    """Stop a running agent session."""
+    with _lock:
+        sess = _sessions.get(sid)
+    if not sess:
+        return jsonify({"aborted": False, "error": "Session not found"})
+    sess["abort"].set()
+    sess["running"] = False
+    return jsonify({"aborted": True})
+
+# Allowed directories for file serving (security: prevent path traversal)
+_ALLOWED_ROOTS = [
+    Path("/home/xenon/xhy/motus/projects"),
+    Path("/home/xenon/xhy/motus/agent/workspaces"),
+]
+_ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".md", ".csv", ".xvg", ".log", ".tex"}
+
+@app.route("/api/files/<path:filepath>")
+def serve_file(filepath):
+    """Serve generated files (PDF reports, figures, etc.) with security checks."""
+    full = Path("/") / filepath
+    if not full.exists():
+        return jsonify({"error": "File not found"}), 404
+    # Security: only allow files under approved directories
+    resolved = full.resolve()
+    allowed = any(str(resolved).startswith(str(r.resolve())) for r in _ALLOWED_ROOTS)
+    if not allowed:
+        return jsonify({"error": "Access denied"}), 403
+    if resolved.suffix.lower() not in _ALLOWED_EXTENSIONS:
+        return jsonify({"error": "File type not allowed"}), 403
+    return send_from_directory(str(resolved.parent), resolved.name)
 
 @app.route("/api/session/<sid>/messages")
 def session_messages(sid):
@@ -499,57 +713,155 @@ def session_messages(sid):
                 msgs.append({"type": "motus", "content": content})
     return jsonify(msgs)
 
-@app.route("/api/chat/<sid>")
+@app.route("/api/chat/<sid>", methods=["GET", "POST"])
 def chat_stream(sid):
-    """SSE endpoint — runs agent in thread, streams events."""
-    message = request.args.get("message", "")
+    """SSE endpoint — supports both GET (EventSource) and POST (fetch streaming).
+    
+    POST is preferred: avoids URL length limits for long messages and works 
+    better through Cloudflare tunnels. Returns SSE with anti-buffering headers.
+    """
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        message = data.get("message", "")
+    else:
+        message = request.args.get("message", "")
+    
     if not message:
-        return Response("data: {\"type\":\"error\",\"content\":\"No message\"}\n\n", mimetype="text/event-stream")
+        return Response("data: {\"type\":\"error\",\"content\":\"No message\"}\n\n", 
+                       mimetype="text/event-stream")
 
     with _lock:
         sess = _sessions.get(sid)
     if not sess:
-        return Response("data: {\"type\":\"error\",\"content\":\"Session not found\"}\n\n", mimetype="text/event-stream")
+        return Response("data: {\"type\":\"error\",\"content\":\"Session not found\"}\n\n", 
+                       mimetype="text/event-stream")
 
     agent = sess["agent"]
+    abort_event = sess["abort"]
+    abort_event.clear()  # Reset abort flag for new request
+    event_queue = Queue()
+    # Thread-safe result holder
+    result_holder = {"response": None, "error": None, "done": False}
+
+    def tool_cb(iteration, fn_name, args, result):
+        """Called from agent thread — push events + detect generated files."""
+        clean = (result or "")
+        clean = ''.join(c if ord(c) >= 32 or c in '\n\r\t' else ' ' for c in clean)
+        short = (clean[:200] + "...") if len(clean) > 200 else clean
+        event_queue.put({
+            "type": "tool",
+            "iteration": iteration,
+            "tool_name": fn_name,
+            "args_preview": (", ".join(f"{k}={v}" for k, v in args.items() if k != "job_dir"))[:80],
+            "result_preview": short,
+        })
+        # Scan full result for generated file paths
+        import re
+        for ext, icon, label in [('.pdf', '📄', 'PDF Report'), ('.png', '🖼️', 'Figure')]:
+            paths = re.findall(r'(/[\w/._()+-]+\.' + ext[1:] + r')', clean, re.IGNORECASE)
+            for p in paths[:8]:  # Max 8 files
+                pp = Path(p)
+                if pp.exists() and pp.stat().st_size > 100:
+                    rel = str(pp).lstrip('/')
+                    event_queue.put({
+                        "type": "file",
+                        "path": rel,
+                        "filename": pp.name,
+                        "label": label,
+                        "icon": icon,
+                    })
+
+    def run_agent():
+        """Background thread: run agent.chat() and signal completion."""
+        try:
+            original_tool_cb = agent._tool_callback
+            agent._tool_callback = tool_cb
+
+            # Set streaming callbacks for real-time text + stage events
+            agent.set_stream_callbacks(
+                text_cb=lambda chunk: event_queue.put({"type": "text", "content": chunk}),
+                stage_cb=lambda stage: event_queue.put({"type": "stage", "stage": stage}),
+            )
+
+            try:
+                result_holder["response"] = agent.chat(message)
+            finally:
+                agent._tool_callback = original_tool_cb
+                agent.set_stream_callbacks(None, None)  # Clean up
+        except Exception as e:
+            result_holder["error"] = str(e)
+        finally:
+            result_holder["done"] = True
+            event_queue.put({"type": "_done"})
+
+    thread = threading.Thread(target=run_agent, daemon=True)
+    thread.start()
 
     def generate():
-        # Override tool callback to emit SSE events
-        events = []
+        import queue
+        heartbeat_count = 0
+        while True:
+            try:
+                evt = event_queue.get(timeout=5)
+            except queue.Empty:
+                if result_holder["done"]:
+                    break
+                heartbeat_count += 1
+                yield f"data: {json.dumps({'type': 'heartbeat', 'count': heartbeat_count})}\n\n"
+                continue
 
-        def tool_cb(iteration, fn_name, args, result):
-            evt = json.dumps({
-                "type": "tool",
-                "iteration": iteration,
-                "tool_name": fn_name,
-                "args_preview": ", ".join(f"{k}={v}" for k, v in args.items() if k != "job_dir")[:100],
-                "result_preview": (result or "")[:200],
-            })
-            events.append(evt)
+            if evt.get("type") == "_done":
+                break
 
-        original_cb = agent._tool_callback
-        agent._tool_callback = tool_cb
+            etype = evt.get("type", "")
 
-        try:
-            response_text = agent.chat(message)
-        except Exception as e:
-            if events:
-                for evt in events:
-                    yield f"data: {evt}\n\n"
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
-            return
-        finally:
-            agent._tool_callback = original_cb
+            # Forward text tokens directly (they go to the streaming message)
+            if etype == "text":
+                yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                continue
 
-        # Emit all tool events
-        for evt in events:
-            yield f"data: {evt}\n\n"
+            # Map stage codes to user-friendly labels
+            if etype == "stage":
+                stage = evt.get("stage", "")
+                stage_labels = {
+                    "reasoning": "🧠 Reasoning & planning...",
+                    "building": "🏗️ Building molecular system...",
+                    "simulating": "⚡ Running MD simulation...",
+                    "analyzing": "🔬 Performing comprehensive analysis...",
+                    "writing": "📝 Generating LaTeX report...",
+                    "executing": "🔧 Executing tool...",
+                }
+                evt["label"] = stage_labels.get(stage, f"🔄 {stage}...")
+                yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                continue
 
-        # Emit final response
-        yield f"data: {json.dumps({'type': 'response', 'content': response_text})}\n\n"
+            # Tool events — add stage_hint, detect generated files
+            if etype == "tool":
+                tool_name = evt.get("tool_name", "")
+                stage_hints = {
+                    "build_system": "🏗️ Building molecular system...",
+                    "run_md": "⚡ Running MD simulation...",
+                    "comprehensive_analysis": "🔬 Performing comprehensive analysis...",
+                    "generate_report": "📝 Generating LaTeX report...",
+                }
+                if tool_name in stage_hints:
+                    evt["stage_hint"] = stage_hints[tool_name]
+                yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                continue
+
+            # Unknown event type — forward as-is
+            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+        if result_holder["error"]:
+            yield f"data: {json.dumps({'type': 'error', 'content': result_holder['error']}, ensure_ascii=False)}\n\n"
+        elif result_holder["response"]:
+            yield f"data: {json.dumps({'type': 'response', 'content': result_holder['response']}, ensure_ascii=False)}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-    return Response(generate(), mimetype="text/event-stream")
+    return Response(generate(), mimetype="text/event-stream",
+                   headers={"Cache-Control": "no-cache, no-store, must-revalidate",
+                           "X-Accel-Buffering": "no",
+                           "Connection": "keep-alive"})
 
 def main():
     import argparse

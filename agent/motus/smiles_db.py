@@ -116,6 +116,11 @@ MOLECULES = {
     "hmx":          {"smiles": "C1N(CN(CN(CN1[N+](=O)[O-])[N+](=O)[O-])[N+](=O)[O-])[N+](=O)[O-]", "category": "energetic", "notes": "Octogen"},
     "nitroglycerin":{"smiles": "C(C(CO[N+](=O)[O-])O[N+](=O)[O-])O[N+](=O)[O-]", "category": "energetic", "notes": "NG"},
     "nitromethane": {"smiles": "C[N+](=O)[O-]", "category": "energetic", "notes": "NM"},
+    # ===== Battery electrolytes =====
+    "dme":       {"smiles": "COCCOC",                         "category": "solvent", "notes": "1,2-dimethoxyethane, glyme, Li-battery solvent"},
+    "li+":       {"smiles": "[Li+]",                          "category": "ion", "notes": "Lithium cation, charge +1"},
+    "fsi-":      {"smiles": "N(S(=O)(=O)F)S(=O)(=O)F",       "category": "ion", "notes": "Bis(fluorosulfonyl)imide anion, charge -1"},
+
 }
 
 # Aliases — map common alternative names to canonical keys
@@ -154,6 +159,13 @@ ALIASES = {
     "o2": "oxygen",
     "h2": "hydrogen",
     "n2": "nitrogen",
+    "lifsi": "fsi-",
+    "li": "li+",
+    "lithium": "li+",
+    "fsi": "fsi-",
+    "1,2-dimethoxyethane": "dme",
+    "glyme": "dme",
+
 }
 
 

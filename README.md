@@ -53,18 +53,22 @@ motus --session 20260514_215205
 
 The Agent will:
 1. **Understand** your research question
-2. **Build** the molecular system (water box, methane-water, hydrate...)
-3. **Simulate** with GROMACS or LAMMPS (EM → NVT → NPT → Production)
-4. **Analyze** — energy, RDF, RMSD, H-bonds, density, clustering...
-5. **Render** publication-quality structure images with VMD
-6. **Interpret** results and suggest next steps
-7. **Teach** — ask MD fundamentals and get interactive explanations
+2. **Build** the molecular system via Packmol (~90 molecule SMILES DB, PubChem fallback)
+3. **Simulate** with GROMACS, LAMMPS, or Desmond (EM → NVT → NPT → Production)
+4. **Model** for Desmond — auto-convert Packmol PDB → .cms via S-OPLS pipeline
+5. **Analyze** — energy, RDF, RMSD, H-bonds, density, clustering, PCA, MSD...
+6. **Render** publication-quality structure images with VMD
+7. **Generate** LaTeX PDF reports with figures, tables, and quantitative conclusions
+8. **Interpret** results and suggest next research steps
+9. **Teach** — ask MD fundamentals and get interactive explanations
 
 ### Features
 
 - **Natural Language Interface** — no scripting, no config files
+- **Triple Engine Support** — GROMACS, LAMMPS, and Desmond (build + MD + analysis)
+- **Desmond Modeling Pipeline** — Packmol PDB → .cms in ~46s via S-OPLS
 - **Dual Role** — research scientist + passionate professor
-- **Auto-detect** — knows GROMACS, LAMMPS, VMD, GPU paths
+- **Auto-detect** — knows GROMACS, LAMMPS, VMD, GPU, Schrödinger paths
 - **Session Memory** — all conversations saved, resumable
 - **Web Dashboard** — sci-fi themed, mobile-responsive, SSE real-time streaming
 - **LLM Backend** — DeepSeek (configurable)
@@ -84,6 +88,22 @@ Hello World
   gmx solvate    gmx mdrun      RDF, RMSD,      LaTeX Paper
   insert-mol     GPU CUDA       H-bonds, E      PDF Output
 ```
+
+### Agent Demo
+
+<p align="center">
+  <img src="docs/images/agent/MOTUS-demo.png" alt="MOTUS Agent Demo" width="750">
+</p>
+<p align="center">
+  <em>Agent Web Interface — Real-time streaming, dark sci-fi theme, multi-tool orchestration</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/agent/MOTUS-demo2.png" alt="MOTUS Agent Demo 2" width="750">
+</p>
+<p align="center">
+  <em>Research Workflow — Automatic analysis, publication-quality figures, and PDF report generation</em>
+</p>
 
 ### Web Interface
 
@@ -209,7 +229,8 @@ bash ../motus/desmond/desmond-analysis.sh --fig-only
 | Feature | Desmond | GROMACS | LAMMPS |
 |:--------|:-------:|:-------:|:------:|
 | **MD Production** (EM + Equil + Prod) | ✅ | ✅ | ✅ |
-| **AI Agent** (Natural Language → Simulation) | — | ✅ | — |
+| **Automated Modeling** (Packmol → .cms) | ✅ | — | — |
+| **AI Agent** (Natural Language → Simulation) | ✅ | ✅ | ✅ |
 | **Cross-Platform Maestro** (Win/Linux CRLF auto-fix) | ✅ | — | — |
 | **CWD Auto-Detection** (no folder args) | ✅ | ✅ | ✅ |
 | **Real-Time Progress Bar** | ✅ | — | — |

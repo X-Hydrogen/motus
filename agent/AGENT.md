@@ -14,17 +14,22 @@ agent/
 │   ├── memory/
 │   │   └── store.py        # JSON-file session persistence
 │   ├── tools/
-│   │   ├── md_build.py     # build_system: water, methane, hydrate
-│   │   ├── md_run.py       # run_md: GROMACS / LAMMPS
+│   │   ├── md_build.py     # build_system: SMILES → Packmol assembly
+│   │   ├── md_run.py       # run_md: GROMACS / LAMMPS / Desmond
+│   │   ├── md_desmond.py   # model_desmond: Packmol PDB → Desmond .cms
 │   │   ├── md_analyze.py   # analyze: energy, RDF, RMSD, H-bonds...
+│   │   ├── md_comprehensive.py  # comprehensive_analysis: 9 modules + figures
 │   │   ├── md_render.py    # render_system: VMD + Tachyon
+│   │   ├── md_report.py    # generate_report: LaTeX → PDF
 │   │   ├── md_read.py      # read_data: CSV/XVG/log inspection
 │   │   └── md_system.py    # terminal, read_file, write_file, search_files
 │   └── web/
 │       ├── app.py           # Flask web server (port 8848)
 │       └── tunnel.py        # Public tunnel helper (serveo)
 ├── scripts/
-│   └── build_hydrate_system.py  # Methane hydrate system builder
+│   ├── build_hydrate_system.py  # Methane hydrate system builder
+│   ├── build_by_packmol.py      # Multi-component Packmol assembly
+│   └── fetch_molecule.py        # SMILES DB → 3D PDB
 └── pyproject.toml          # v1.0.0, setuptools
 ```
 
@@ -40,6 +45,20 @@ Mimics Hermes Agent architecture:
 1. LLM receives system prompt + tool schemas
 2. Iteratively chooses and executes tool calls
 3. Final response delivered to user
+
+### Desmond Modeling Pipeline
+
+The `model_desmond` tool converts Packmol-built PDBs to Desmond .cms files:
+
+```
+Packmol packed.pdb → pdbconvert → .mae → multisim (S-OPLS) → .cms
+```
+
+Critical rules (discovered through extensive testing):
+- **Must use S-OPLS** — OPLS4 triggers mmlewis Lewis structure detection bug
+- **Must use raw packed.pdb** — residue renaming breaks multisim post-processing
+- **Must include build_geometry stage** in .msj with explicit box size
+- Performance: ~46s for 10414-atom system (build_geometry 23s + forcefield 22s)
 
 ### Adding New Tools
 
