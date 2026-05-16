@@ -82,14 +82,28 @@ You are an autonomous MD scientist. You can:
 - **Progress over perfection.** An imperfect simulation that finishes is better than a perfect one that never starts.
 - **When analysis or MD fails**, diagnose ONCE, fix ONCE, then move on.
 
-## Report Standards (CRITICAL — follow exactly)
-When the research is complete, write the final report as LaTeX directly (use write_file, NOT generate_report template):
-1. **Class**: `\documentclass[twocolumn,10pt]{article}`, 2cm margins. Packages: graphicx, amsmath, booktabs, hyperref, caption, subcaption, siunitx.
-2. **Structure**: Abstract(quantitative) -> Introduction -> Methods(System Setup, Simulation Protocol, Analysis) -> Results(per-property subsections) -> Discussion(strengths, weaknesses, limitations: what MD CAN vs CANNOT conclude) -> Conclusion -> References.
-3. **Figures**: `[h]`, `\linewidth`. system_snapshot.png as Figure 1 after Methods. Captions describe what reader sees AND physical meaning.
-4. **Numbers**: always with units (± uncertainty), and comparison to experimental values when available.
-5. **Tables**: booktabs style (\toprule, \midrule, \bottomrule).
-6. **Limitations section MANDATORY**: bullet list or table explicitly separating classical MD capabilities from requirements for reactive/interfacial/electronic methods.
+## Report Standards (CRITICAL — MUST meet this quality bar)
+When the research is complete, write the final report as LaTeX directly (use write_file, NOT generate_report template). The report MUST meet or exceed the quality of the reference paper at `/home/xenon/xhy/motus/agent/motus/templates/paper-reference.pdf` (16 pages, ~8000 words). Use `read_file` to load the reference LaTeX template from `/home/xenon/xhy/motus/agent/motus/templates/paper-template-desmond.tex` for structure guidance.
+
+**MANDATORY requirements (paper will be REJECTED if missing):**
+
+1. **Document class**: `\documentclass[twocolumn,10pt]{article}`, 2cm margins. Packages: graphicx, amsmath, booktabs, hyperref, caption, subcaption, siunitx, float, xcolor, enumitem, cleveref, placeins.
+2. **Float placement**: `\raggedbottom`, `\renewcommand{\floatpagefraction}{0.7}`, ALL figures/tables use `[!ht]` (NOT `[htbp]`), `\FloatBarrier` before References.
+3. **Abstract**: Inside `\twocolumn[...]` with `\maketitle` + abstract text + `\vspace{18pt}` (inside the bracket, not after `]`). Single paragraph, no subsection breaks. Followed by Keywords line.
+4. **Title/Author**: Title = single bold line, no subtitle. Author = three-line MOTUS Agent format. `\date{}` (empty, no date).
+5. **Structure** (all required — min 12 pages output):
+   - **Introduction** (≥4 paragraphs): Background → problem → prior work → MOTUS → this work
+   - **Computational Methods** (≥4 subsections): System Construction (SMILES, Packmol, composition), Force Field, Simulation Protocol (staged equilibration with timing), Analysis Pipeline (table of modules), Key Data Conventions (.ene columns, equilibration cutoff, API indexing)
+   - **Results** (≥8 subsections): Each subsection MUST have ≥3 sentences of scientific discussion BEFORE the figure, and ≥2 sentences AFTER. Never stack figures without intervening text. Include: Performance, Thermodynamics (timeseries + distribution), Density, Spatial Profiles (1D + 2D), Radius of Gyration (formula + per-species analysis), Distance Monitoring (3 observations: short contacts, diffusive behavior, no association), Dipole Analysis (dielectric implications), Clustering + PCA (cluster stats + PCA variance explained + timeline interpretation), SIMA (bullet key observations), Dashboard
+   - **Discussion** (≥6 subsections): Pipeline Performance (with timing table), Force Field Considerations, Simulation Timescale Limitations (3 bullet items), Computational Scalability Challenges, Comparison with Prior Studies, Future Directions (8 numbered items)
+   - **Conclusion** (6 numbered contributions + concluding paragraph)
+   - **References** (≥10, real citations)
+6. **Figures**: `\linewidth`, `[!ht]`. Captions describe what reader sees AND physical meaning. Figure 1 = 5-panel system structure composite (VMD snapshot + molecule diagrams + pie chart + params).
+7. **Tables**: `booktabs` style, `p{}` column widths to prevent overflow. Must include: Table 1 (simulation parameters), Table 2 (analysis modules with status), Table 3 (wall-clock performance).
+8. **Numbers**: always with units (± uncertainty). Compare to experimental values.
+9. **VMD rendering**: Licorice bond-line, `color Display Background white`, `axes location Off`, `scale by 1.2`, TachyonInternal → TGA → PNG.
+10. **NEVER mention Schrödinger** (commercial software). Say "Desmond 8.2" or "Desmond engine" only.
+11. **Limitations section MANDATORY**: bullet list explicitly separating classical MD capabilities from requirements for reactive/interfacial/electronic methods.
 """
 
 

@@ -163,10 +163,17 @@ def plot_properties(analysis_dir, outdir):
                 pad = (y_max - y_min) * 0.1
                 ax.set_ylim(y_min - pad, y_max + pad)
 
-            # Y tick interval from dict, fallback to auto
+            # Y tick: use interval from dict only if it yields 4-8 ticks;
+            # otherwise fall back to MaxNLocator(5) to avoid tick congestion
             interval = Y_TICK_INTERVALS.get(m)
-            if interval and y_max - y_min > interval:
-                ax.yaxis.set_major_locator(ticker.MultipleLocator(interval))
+            if interval and y_max - y_min > 0:
+                n_ticks = (y_max - y_min) / interval
+                if 3 <= n_ticks <= 10:
+                    ax.yaxis.set_major_locator(ticker.MultipleLocator(interval))
+                else:
+                    ax.yaxis.set_major_locator(ticker.MaxNLocator(5))
+            elif y_max - y_min > 0:
+                ax.yaxis.set_major_locator(ticker.MaxNLocator(5))
 
             ax.set_xlim(0, x.max())
 

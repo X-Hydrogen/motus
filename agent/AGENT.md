@@ -14,15 +14,18 @@ agent/
 │   ├── memory/
 │   │   └── store.py        # JSON-file session persistence
 │   ├── tools/
-│   │   ├── md_build.py     # build_system: SMILES → Packmol assembly
-│   │   ├── md_run.py       # run_md: GROMACS / LAMMPS / Desmond
-│   │   ├── md_desmond.py   # model_desmond: Packmol PDB → Desmond .cms
-│   │   ├── md_analyze.py   # analyze: energy, RDF, RMSD, H-bonds...
+│   │   ├── md_build.py       # build_system: SMILES → Packmol assembly
+│   │   ├── md_run.py         # run_md: GROMACS / LAMMPS / Desmond
+│   │   ├── md_desmond.py     # model_desmond: Packmol PDB → Desmond .cms
+│   │   ├── md_analyze.py     # analyze: energy, RDF, RMSD, H-bonds...
 │   │   ├── md_comprehensive.py  # comprehensive_analysis: 9 modules + figures
-│   │   ├── md_render.py    # render_system: VMD + Tachyon
-│   │   ├── md_report.py    # generate_report: LaTeX → PDF
-│   │   ├── md_read.py      # read_data: CSV/XVG/log inspection
-│   │   └── md_system.py    # terminal, read_file, write_file, search_files
+│   │   ├── md_render.py      # render_system: VMD + Tachyon
+│   │   ├── md_report.py      # generate_report: LaTeX → PDF (gold-standard template)
+│   │   ├── md_read.py        # read_data: CSV/XVG/log inspection
+│   │   └── md_system.py      # terminal, read_file, write_file, search_files
+│   ├── templates/            # Paper templates
+│   │   ├── paper-template-desmond.tex  # Gold standard (579 lines)
+│   │   └── paper-reference.pdf         # Reference PDF (16pp, ~8000 words)
 │   └── web/
 │       ├── app.py           # Flask web server (port 8848)
 │       └── tunnel.py        # Public tunnel helper (serveo)
@@ -77,3 +80,13 @@ motus                             # interactive
 # Web
 motus-web                         # http://localhost:8848
 ```
+
+### Paper Quality Standards
+
+The MOTUS Agent enforces a gold-standard paper template (16 pages, ~8000 words) for all Desmond publications. Key requirements:
+- **11 mandatory rules** in the system prompt (loop.py Report Standards)
+- Template at `motus/templates/paper-template-desmond.tex` (579 lines)
+- Reference PDF at `motus/templates/paper-reference.pdf`
+- Desmond auto-publish: `desmond/desmond-publish.sh` (one-click from analysis data)
+- All figures use `[!ht]` + `\raggedbottom` + `\FloatBarrier` to prevent float-only pages
+- Never mention Schrödinger (commercial) — use "Desmond engine" or "Desmond 8.2" only
