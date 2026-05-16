@@ -35,6 +35,55 @@ Across all these fields, the bottleneck is the same: **turning terabytes of simu
 
 ## 🧬 MOTUS Agent — AI Scientist
 
+### Installation
+
+MOTUS requires a one-time setup on any new server. **`git clone` alone is not enough** — you must run the installer to create the configuration directory:
+
+```bash
+git clone https://github.com/X-Hydrogen/motus.git
+cd motus
+bash install.sh
+```
+
+The installer does four things:
+
+| Step | What it does |
+|------|-------------|
+| 1 | Creates `~/.motus/` — the per-machine configuration directory |
+| 2 | Writes `~/.motus/.env` — API key template |
+| 3 | Installs the Python package (`pip install -e agent/`) |
+| 4 | Detects installed MD engines (GROMACS, LAMMPS, Desmond) |
+
+#### API Key Configuration
+
+The MOTUS Agent uses **DeepSeek** as its LLM backend. Your API key is stored in the file below — **this file is outside the Git repository** (`agent/.env` is gitignored, and `~/.motus/.env` lives in your home directory) so you never accidentally commit sensitive credentials:
+
+```bash
+# Edit your API key
+nano ~/.motus/.env
+```
+
+File contents:
+```
+MOTUS_DEEPSEEK_KEY=sk-your-key-here
+```
+
+Environment variables — `~/.motus/.env` or `MOTUS_DEEPSEEK_KEY` — both work. The file takes precedence for convenience; the env var is useful for CI/CD or Docker.
+
+Get your key at: https://platform.deepseek.com/api_keys
+
+> ⚠️ **Migration note:** When moving MOTUS to a new server, clone the repo AND run `bash install.sh`. Then copy or recreate your `~/.motus/.env` with the API key. The `.env` file is never in the Git repo — it's per-machine, per-user configuration.
+
+#### Requirements
+
+| Requirement | Version | Required? |
+|------------|---------|-----------|
+| Python | ≥ 3.10 | ✅ Required |
+| GROMACS | any | Optional (engine scripts) |
+| LAMMPS | any | Optional (engine scripts) |
+| Schrödinger Suite | any | Optional (Desmond engine) |
+| VMD | any | Optional (system rendering) |
+
 ### Quick Start
 
 ```bash
@@ -454,6 +503,7 @@ All figures saved in `<md_output>/analysis/figures/`:
 motus/
 ├── README.md                      ← You are here
 ├── LICENSE                        ← MIT
+├── install.sh                     ← One-command server setup
 ├── .gitignore
 ├── docs/images/                   ← Documentation screenshots
 │   ├── MOTUS-top.png              ← Banner
