@@ -135,7 +135,7 @@ cd desmond_md_job_my-system
 # → < 2 minutes
 ```
 
-**New in v1.0.0:** Autonomous AI scientist — describe your research in natural language and MOTUS does everything. Also: LAMMPS reactive MD, CWD auto-detection for all engines.
+**New in v1.0.0:** Autonomous AI scientist — describe your research in natural language and MOTUS does everything. Gold-standard 16-page LaTeX publication template. Also: LAMMPS reactive MD, Desmond one-click publishing, CWD auto-detection for all engines.
 
 ---
 
@@ -161,7 +161,10 @@ bash ../motus/desmond/desmond-md.sh -t 5000 -i 2.5     # Or override time & inte
 # 3. Full analysis + figures (same folder)
 bash ../motus/desmond/desmond-analysis.sh --plot
 
-# 4. Re-plot from existing data (seconds)
+# 4. One-click publication paper (16pp, ~8000 words)
+bash ../motus/desmond/desmond-publish.sh
+
+# 5. Re-plot from existing data (seconds)
 bash ../motus/desmond/desmond-analysis.sh --fig-only
 ```
 
@@ -470,10 +473,16 @@ motus/
 │   │   ├── tools/                 ← MD tools
 │   │   │   ├── md_build.py        ← build_system
 │   │   │   ├── md_run.py          ← run_md
+│   │   │   ├── md_desmond.py      ← model_desmond (Packmol → .cms)
 │   │   │   ├── md_analyze.py      ← analyze
+│   │   │   ├── md_comprehensive.py ← comprehensive_analysis (9 modules)
 │   │   │   ├── md_render.py       ← render_system
+│   │   │   ├── md_report.py       ← generate_report (gold-standard template)
 │   │   │   ├── md_read.py         ← read_data
 │   │   │   └── md_system.py       ← terminal, file ops
+│   │   ├── templates/             ← Paper templates (16pp gold standard)
+│   │   │   ├── paper-template-desmond.tex  ← Desmond LaTeX template
+│   │   │   └── paper-reference.pdf         ← Reference output (16pp, ~8000 words)
 │   │   └── web/                   ← Web interface
 │   │       ├── app.py             ← Flask server (port 8848)
 │   │       └── tunnel.py          ← Public tunnel helper
@@ -483,7 +492,11 @@ motus/
 ├── desmond/                       ← Desmond engine scripts
 │   ├── desmond-md.sh              ← MD job submission & monitoring
 │   ├── desmond-analysis.sh        ← Post-processing pipeline (15 modules)
+│   ├── desmond-publish.sh         ← One-click LaTeX paper generation (16pp)
 │   ├── desmond-metadynamics.sh    ← MetaD enhanced sampling
+│   ├── templates/                 ← Paper templates
+│   │   ├── paper-template.tex     ← Gold-standard LaTeX template (579 lines)
+│   │   └── paper-reference.pdf    ← Reference output (16pp, ~8000 words)
 │   └── functions/
 │       ├── desmond_plot.py        ← Publication-quality figure generator
 │       ├── sima_gen.py            ← SIMA data generator
