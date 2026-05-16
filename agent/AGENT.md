@@ -73,6 +73,9 @@ Critical rules (discovered through extensive testing):
 ### Running
 
 ```bash
+# First-time setup on a new server
+bash install.sh                  # Creates ~/.motus/.env and installs package
+
 # CLI
 motus "study methane hydrate formation"
 motus                             # interactive

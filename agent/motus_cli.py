@@ -10,6 +10,10 @@ Usage:
     motus --version                    # Show version
     motus --help                       # Show help
 
+Setup:
+    bash install.sh                    # One-time: creates ~/.motus/.env, pip install
+    nano ~/.motus/.env                 # Set your DeepSeek API key
+
 Version: 1.0.0
 """
 import sys
@@ -54,6 +58,10 @@ HELP_TEXT = """
   `/new`       — Start a new session
   `/quit`      — Exit MOTUS
   `/q`         — Exit (shorthand)
+
+**Setup:**
+  API key → `~/.motus/.env` (or `MOTUS_DEEPSEEK_KEY` env var)
+  Install → `bash install.sh` (one-time per server)
 
 **Anything else** is treated as a research question. MOTUS will:
   1. Design and build your molecular system
