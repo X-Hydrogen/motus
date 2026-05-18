@@ -104,34 +104,36 @@ def main():
         else:
             solute_mols.add(mn)
 
-    # Prepare per-solute-molecule output writers + cumulative position vectors
-    # For each solute molecule, we compute dipole: μ = Σ q_i * r_i
-    solute_mol_labels = {}
+    # Prepare per-solute-molecule-type output writers
+    # Group molecules by formula (e.g., all Na+ ions → one group)
+    solute_mol_groups = defaultdict(list)  # formula → [(mn, atom_list), ...]
     for mn in sorted(solute_mols):
         alist = mol_atoms[mn]
-        label = get_molecule_label(st, mn, [a['atom'] for a in alist])
-        # De-duplicate: if multiple molecules have same formula, number them
-        base_label = label
-        counter = 1
-        while label in solute_mol_labels.values():
-            label = f'{base_label}_{counter}'
-            counter += 1
-        solute_mol_labels[mn] = label
+        formula = get_molecule_label(st, mn, [a['atom'] for a in alist])
+        solute_mol_groups[formula].append((mn, alist))
 
-    print(f'   Solute molecules: {len(solute_mols)}')
-    for mn, lbl in sorted(solute_mol_labels.items()):
-        print(f'      M{mn}: {lbl} ({len(mol_atoms[mn])} atoms)')
+    print(f'   Solute molecule types: {len(solute_mol_groups)}')
+    for formula, mols in sorted(solute_mol_groups.items()):
+        n_mols = len(mols)
+        total_atoms = sum(len(alist) for _, alist in mols)
+        label = formula if n_mols == 1 else f'{formula}_{n_mols}mol'
+        print(f'      {formula}: {n_mols} molecule(s), {total_atoms} total atoms')
 
-    # Open per-molecule CSV writers
-    per_mol_writers = {}
-    per_mol_files = {}
-    for mn, lbl in solute_mol_labels.items():
-        fpath = os.path.join(outdir, f'dipole_{lbl}.csv')
+    # Open per-type CSV writers
+    per_type_writers = {}
+    per_type_files = {}
+    for formula, mols in solute_mol_groups.items():
+        n_mols = len(mols)
+        label = formula if n_mols == 1 else f'{formula}_{n_mols}mol'
+        fpath = os.path.join(outdir, f'dipole_{label}.csv')
         f = open(fpath, 'w', newline='')
-        per_mol_files[mn] = f
+        per_type_files[formula] = f
         w = csv.writer(f)
-        w.writerow(['Time_ps', 'Mu_Mag_D', 'Mu_X_D', 'Mu_Y_D', 'Mu_Z_D'])
-        per_mol_writers[mn] = w
+        if n_mols == 1:
+            w.writerow(['Time_ps', 'Mu_Mag_D', 'Mu_X_D', 'Mu_Y_D', 'Mu_Z_D'])
+        else:
+            w.writerow(['Time_ps', 'Mu_Mag_D', 'Mu_X_D', 'Mu_Y_D', 'Mu_Z_D', 'Mu_per_mol_D'])
+        per_type_writers[formula] = (w, mols, n_mols)
 
     # Total dipole writer
     total_fpath = os.path.join(outdir, 'dipole_total.csv')
@@ -155,31 +157,37 @@ def main():
         total_w.writerow([f'{t:.3f}', f'{total_mag:.4f}',
                           f'{total_mu[0]:.4f}', f'{total_mu[1]:.4f}', f'{total_mu[2]:.4f}'])
 
-        # Per-molecule dipole (use centroid as reference)
-        for mn, lbl in solute_mol_labels.items():
-            mol_idx_list = [a['idx'] for a in mol_atoms[mn]]
-            charges = np.array([atoms_info[idx2]['charge'] for idx2 in mol_idx_list])
-            mol_pos = pos[mol_idx_list]
-            centroid = mol_pos.mean(axis=0)
+        # Per-type dipole (aggregate for groups of identical molecules)
+        for formula, (w, mols, n_mols) in per_type_writers.items():
+            type_mu = np.zeros(3)
+            for mn, alist in mols:
+                mol_idx_list = [a['idx'] for a in alist]
+                charges = np.array([atoms_info[idx]['charge'] for idx in mol_idx_list])
+                mol_pos = pos[mol_idx_list]
+                centroid = mol_pos.mean(axis=0)
 
-            mu = np.zeros(3)
-            for j, aidx in enumerate(mol_idx_list):
-                r = pos[aidx] - centroid
-                # Minimal image w.r.t. centroid
-                for d in range(3):
-                    r[d] -= box[d][d] * round(r[d] / box[d][d])
-                mu += charges[j] * r * E_TO_DEBYE
+                mu = np.zeros(3)
+                for j, aidx in enumerate(mol_idx_list):
+                    r = pos[aidx] - centroid
+                    for d in range(3):
+                        r[d] -= box[d][d] * round(r[d] / box[d][d])
+                    mu += charges[j] * r * E_TO_DEBYE
+                type_mu += mu
 
-            mag = np.sqrt(np.sum(mu**2))
-            w = per_mol_writers[mn]
-            w.writerow([f'{t:.3f}', f'{mag:.4f}',
-                        f'{mu[0]:.4f}', f'{mu[1]:.4f}', f'{mu[2]:.4f}'])
+            mag = np.sqrt(np.sum(type_mu**2))
+            if n_mols == 1:
+                w.writerow([f'{t:.3f}', f'{mag:.4f}',
+                            f'{type_mu[0]:.4f}', f'{type_mu[1]:.4f}', f'{type_mu[2]:.4f}'])
+            else:
+                w.writerow([f'{t:.3f}', f'{mag:.4f}',
+                            f'{type_mu[0]:.4f}', f'{type_mu[1]:.4f}', f'{type_mu[2]:.4f}',
+                            f'{mag/n_mols:.4f}'])
 
         if i % max(1, n_frames // 10) == 0:
             print(f'   Frame {i}/{n_frames}  t={t:.1f} ps  μ_total={total_mag:.2f} D')
 
     # Close files
-    for f in per_mol_files.values():
+    for f in per_type_files.values():
         f.close()
     total_f.close()
 
@@ -192,8 +200,8 @@ def main():
     print(f'\n   Total dipole: {avg_mu:.2f} ± {std_mu:.2f} D')
     print(f'   Range: [{np.min(mu_mags):.2f}, {np.max(mu_mags):.2f}] D')
 
-    n_files = len(per_mol_files) + 1
-    print(f'\n✅ {n_files} dipole CSV file(s) saved to {outdir}/')
+    n_files = len(per_type_files) + 1
+    print(f'\n✅ {n_files} dipole CSV file(s) saved to {outdir}/ (grouped by molecule type)')
 
 
 if __name__ == '__main__':

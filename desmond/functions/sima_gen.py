@@ -144,6 +144,8 @@ def main():
                         help='Frame stride (default: 1, use every frame; set higher for speed)')
     parser.add_argument('--max-frames', type=int, default=2000,
                         help='Maximum frames to process (default: 2000)')
+    parser.add_argument('--sasa-stride', type=int, default=0,
+                        help='SASA stride multiplier (0=same as main stride, -1=skip SASA entirely)')
     args = parser.parse_args()
 
     outdir = args.outdir
@@ -230,7 +232,19 @@ def main():
     frames_to_process = list(range(0, n_frames_total, stride))
     n_process = len(frames_to_process)
 
+    # SASA stride (expensive for large systems: single SASA ~2s for 21K atoms)
+    if args.sasa_stride == -1:
+        sasa_stride = None  # skip entirely
+    elif args.sasa_stride > 0:
+        sasa_stride = args.sasa_stride
+    else:
+        sasa_stride = 1  # same as main stride
+
     print(f'   Processing {n_process} frames (stride={stride}, total={n_frames_total})')
+    if sasa_stride is None:
+        print(f'   SASA: skipped (--sasa-stride -1)')
+    elif sasa_stride > 1:
+        print(f'   SASA: every {sasa_stride} frames (interpolated)')
 
     # Initialize output files
     tors_file = open(os.path.join(outdir, 'L_Torsions.dat'), 'w')
@@ -248,27 +262,63 @@ def main():
     ref_pos = {a.index: tr0.pos(a.index) for a in st.atom if a.index in ligand_atoms}
     ref_com = np.mean([tr0.pos(a.index) for a in st.atom if a.index in ligand_atoms], axis=0)
 
+    # ── Pre-compute SASA at reduced stride (if sasa_stride set) ──
+    sasa_cache = {}  # frame_idx -> (molsa, sasa, psa)
+    if sasa_stride is not None:
+        from schrodinger.structutils.analyze import calculate_sasa_by_atom
+        sasa_frames = list(range(0, len(frames_to_process), sasa_stride))
+        for sfi in sasa_frames:
+            frame_idx = frames_to_process[sfi]
+            frame = tr[frame_idx]
+            allpos = frame.pos()
+            for i in range(st.atom_total):
+                p = allpos[i]
+                st.atom[i + 1].x = p[0]
+                st.atom[i + 1].y = p[1]
+                st.atom[i + 1].z = p[2]
+            sasa_result = calculate_sasa_by_atom(st, probe_radius=1.4)
+            sasa_val = sum(sasa_result[i - 1] for i in ligand_atoms)
+            molsa_val = sasa_val
+            polar_indices = [i for i in ligand_atoms if st.atom[i].element in ('O', 'N')]
+            psa_val = sum(sasa_result[i - 1] for i in polar_indices)
+            sasa_cache[sfi] = (molsa_val, sasa_val, psa_val)
+
+    # ── Interpolation helper ──
+    def get_sasa(sfi):
+        if sfi in sasa_cache:
+            return sasa_cache[sfi]
+        if not sasa_cache:
+            return (0.0, 0.0, 0.0)
+        # Find bracketing indices
+        keys = sorted(sasa_cache.keys())
+        lo = max([k for k in keys if k <= sfi], default=keys[0])
+        hi = min([k for k in keys if k >= sfi], default=keys[-1])
+        if lo == hi:
+            return sasa_cache[lo]
+        t = (sfi - lo) / (hi - lo) if hi > lo else 0
+        m0, s0, p0 = sasa_cache[lo]
+        m1, s1, p1 = sasa_cache[hi]
+        return (m0 + t * (m1 - m0), s0 + t * (s1 - s0), p0 + t * (p1 - p0))
+
+    # ── Main processing loop ──
     for fi, frame_idx in enumerate(frames_to_process):
         frame = tr[frame_idx]
         allpos = frame.pos()
         box = frame.box
 
-        # ── Torsions ──
+        # Torsions
         torsion_vals = []
         for a1, a2, a3, a4 in torsion_defs:
             angle = compute_torsion(allpos, a1, a2, a3, a4, box)
             torsion_vals.append(f'{angle:.2f}')
-
         tors_file.write(f'{frame.time:.3f}  ' + '  '.join(torsion_vals) + '\n')
 
-        # ── Properties ──
-        # RMSD: align-free, just superposition on reference
+        # RMSD
         rmsd_val = 0.0
         n_rmsd = 0
         for a in st.atom:
             if a.index in ligand_atoms and a.index in ref_pos:
                 dp = np.array(allpos[a.index]) - np.array(ref_pos[a.index])
-                # minimum image
                 for d in range(3):
                     if box[d][d] > 0:
                         dp[d] -= box[d][d] * round(dp[d] / box[d][d])
@@ -280,35 +330,15 @@ def main():
         lig_pos = np.array([allpos[a.index] for a in st.atom if a.index in ligand_atoms])
         if len(lig_pos) > 0:
             com = np.mean(lig_pos, axis=0)
-            rg_sq = np.mean([np.sum((p - com)**2) for p in lig_pos])
-            rg_val = np.sqrt(rg_sq)
+            rg_val = np.sqrt(np.mean([np.sum((p - com)**2) for p in lig_pos]))
         else:
             rg_val = 0.0
 
         # IntraHB
         intrahb_val = compute_intrahb(st, allpos, ligand_atoms)
 
-        # MolSA, SASA, PSA — update structure coords then compute
-        molsa_val = 0.0
-        sasa_val = 0.0
-        psa_val = 0.0
-        try:
-            from schrodinger.structutils.analyze import calculate_sasa_by_atom
-            # Update structure coordinates from frame
-            for i in range(st.atom_total):
-                p = allpos[i]
-                st.atom[i + 1].x = p[0]
-                st.atom[i + 1].y = p[1]
-                st.atom[i + 1].z = p[2]
-            sasa_result = calculate_sasa_by_atom(st, probe_radius=1.4)
-            # sasa_result is tuple, 0-indexed (atom_idx → SASA)
-            sasa_val = sum(sasa_result[i - 1] for i in ligand_atoms)
-            molsa_val = sasa_val
-            polar_indices = [i for i in ligand_atoms
-                            if st.atom[i].element in ('O', 'N')]
-            psa_val = sum(sasa_result[i - 1] for i in polar_indices)
-        except Exception:
-            pass
+        # SASA (cached or interpolated)
+        molsa_val, sasa_val, psa_val = get_sasa(fi) if sasa_stride is not None else (0.0, 0.0, 0.0)
 
         props_file.write(f'{frame.time:.1f}  {rmsd_val:.3f}  {rg_val:.3f}  '
                         f'{intrahb_val}  {molsa_val:.1f}  {sasa_val:.1f}  {psa_val:.1f}\n')
