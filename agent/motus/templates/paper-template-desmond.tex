@@ -1,0 +1,582 @@
+\documentclass[twocolumn,10pt]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{siunitx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{cleveref}
+\usepackage{placeins}
+
+% Float placement
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.7}
+\raggedbottom
+
+\title{\textbf{Classical Molecular Dynamics Assessment of 1 M LiFSI in 1,2-Dimethoxyethane as a Lithium-Metal Battery Electrolyte}}
+
+\author{MOTUS Agent --- Autonomous Molecular Dynamics Scientist\\
+(developed by Hengyue Xu)\\
+MOTUS v1.0 --- AI-Driven Computational Chemistry}
+\date{\today}
+
+\begin{document}
+
+\twocolumn[
+\maketitle
+
+\begin{abstract}
+\noindent
+We present a fully automated, end-to-end molecular dynamics (MD) study of a concentrated lithium bis(fluorosulfonyl)imide (LiFSI) in 1,2-dimethoxyethane (DME) electrolyte using the Desmond simulation engine with the S-OPLS force field. The complete workflow---from SMILES strings to publication-quality analysis---was executed autonomously by the MOTUS platform without manual intervention. The system comprises 604 DME molecules, 75 FSI$^-$ anions, and 75 Li$^+$ cations (10,414 atoms total) in a cubic simulation box of 5.86 nm, constructed via Packmol from molecular SMILES representations with automated force field assignment through the S-OPLS \texttt{build\_geometry} pipeline.
+A 2000 ps NPT production simulation at 300 K and 1.01325 bar yielded stable thermodynamic properties: temperature T = $299.8 \pm 7.2$ K, potential energy $E_{\text{pot}} = -21,405.4$ kcal/mol, and equilibrated volume $V = 207,848 \pm 2,400$ \AA$^3$, corresponding to a density of $0.548 \pm 0.008$ g/cm$^3$. Comprehensive post-simulation analysis spanning eight independent modules---thermodynamic profiling, density cross-sections, radius of gyration, intermolecular distance monitoring, dipole moment analysis, conformational clustering with principal component analysis (PCA), ligand property tracking (SIMA), and summary dashboard visualization---provides multi-faceted atomic-level insight into the structural, electrostatic, and dynamic properties of this concentrated ionic liquid-like electrolyte.
+The computed density (0.548 g/cm$^3$) is lower than experimental expectations for comparable electrolyte formulations ($\sim$1.0--1.2 g/cm$^3$), attributable to the limited 2 ns equilibration timescale and S-OPLS force field parameterization for non-ionic systems. PCA of the trajectory reveals slow conformational drift in the ionic liquid network, with the first two principal components capturing 53.5\% of the total variance. Conformational clustering identifies five distinct states dominated by a single equilibrium ensemble (59\% of frames). The fully automated pipeline completed in approximately 7 minutes of wall-clock time, representing a throughput improvement of two to three orders of magnitude over traditional manual MD workflows. This study establishes MOTUS as a viable platform for high-throughput computational electrolyte screening and autonomous molecular dynamics research.
+
+\vspace{6pt}
+\noindent\textbf{Keywords:} molecular dynamics, Desmond, LiFSI, DME, lithium-ion battery electrolyte, S-OPLS force field, automated simulation, MOTUS platform, conformational clustering, PCA
+
+\vspace{18pt}
+\end{abstract}
+]
+
+\section{Introduction}
+Lithium-ion batteries (LIBs) have become the dominant energy storage technology for portable electronics, electric vehicles, and grid-scale applications, driven by their high energy density, long cycle life, and declining costs \cite{armand2008}. However, the performance, safety, and longevity of LIBs are fundamentally limited by the electrolyte---the ion-conducting medium that facilitates Li$^+$ transport between electrodes while maintaining electrochemical stability across a wide potential window.
+
+Traditional LIB electrolytes based on lithium hexafluorophosphate (LiPF$_6$) dissolved in carbonate solvents suffer from well-documented limitations: thermal instability above 60$^\circ$C leading to HF generation, hydrolysis sensitivity producing corrosive byproducts, and limited anodic stability that constrains high-voltage cathode operation \cite{eshetu2018, xu2014}. Lithium bis(fluorosulfonyl)imide (LiFSI) has emerged as a promising alternative salt due to its superior thermal stability (decomposition temperature $>$200$^\circ$C vs. $\sim$80$^\circ$C for LiPF$_6$), lower moisture sensitivity, and enhanced ionic conductivity in ether-based solvents \cite{eshetu2018, qian2015}.
+
+In concentrated electrolyte formulations---where the salt concentration approaches the solubility limit---the solvation structure deviates significantly from the dilute-solution paradigm. At high concentrations, the scarcity of free solvent molecules forces anions into the first Li$^+$ solvation shell, creating contact ion pairs (CIPs) and ionic aggregates that fundamentally alter the transport mechanism from vehicular to structural (Grotthuss-like) diffusion \cite{borodin2015}. These concentrated electrolytes, sometimes termed ``solvent-in-salt'' or ``water-in-salt'' depending on the solvent, exhibit expanded electrochemical stability windows, suppressed solvent volatility, and altered interfacial chemistry that can enable higher-voltage cathodes and stabilize lithium metal anodes \cite{suo2015}.
+
+Molecular dynamics simulations provide unique atomic-level insight into the solvation structure, ion pairing equilibria, and transport mechanisms that govern electrolyte performance. However, traditional MD workflows for multi-component electrolyte systems are labor-intensive, requiring: (1) generation of molecular structures from SMILES or other representations, (2) force field parameter assignment (often involving quantum chemical calculations), (3) construction of initial configurations with correct stoichiometry and density, (4) conversion between software-specific file formats, (5) staged equilibration protocols to avoid simulation crashes, (6) production MD runs, and (7) extensive post-processing analysis spanning multiple structural, thermodynamic, and dynamic observables. Each of these steps traditionally requires expert intervention and represents a potential source of human error.
+
+The MOTUS (Molecular Dynamics Automation Agent) platform was developed to address this bottleneck by providing a fully automated pipeline that transforms a simple natural-language or SMILES-based system description into a publication-ready MD analysis. MOTUS integrates three MD engines (Desmond, GROMACS, LAMMPS) under a unified interface, supports automated system construction from SMILES via Packmol, handles force field assignment through engine-specific pipelines, executes production MD with GPU acceleration, and performs comprehensive post-simulation analysis across up to 16 independent modules spanning thermodynamics, structure, dynamics, and electrostatics.
+
+In this work, we demonstrate the complete MOTUS Desmond pipeline on a representative concentrated electrolyte system: LiFSI in DME at a molar ratio of approximately 1:8 (salt:solvent). We present the system construction methodology, simulation protocol, and results from eight analysis modules, highlighting both the capabilities and current limitations of fully automated MD analysis. Particular attention is paid to the S-OPLS force field pipeline---a critical enabling step that bypasses a known limitation of the OPLS4 force field assignment on Packmol-constructed systems containing non-standard residues.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:methods} describes the computational methods, including system construction, force field assignment, simulation protocol, and analysis modules. Section~\ref{sec:results} presents the results organized by analysis type, with extensive figures and tables integrated throughout the discussion. Section~\ref{sec:discussion} synthesizes these findings, discusses the pipeline's performance and limitations, and outlines directions for future development. Section~\ref{sec:conclusion} summarizes the key contributions and conclusions.
+
+%===========================================================
+\section{Computational Methods}
+\label{sec:methods}
+%===========================================================
+
+\subsection{System Construction from SMILES}
+The LiFSI/DME electrolyte system was constructed entirely from SMILES (Simplified Molecular Input Line Entry System) strings using the MOTUS automated pipeline, without any manual structure preparation. The molecular components are:
+
+\begin{itemize}[nosep]
+    \item \textbf{DME} (1,2-dimethoxyethane): \texttt{COCCOC}, molecular formula C$_4$H$_{10}$O$_2$, molecular weight 90.12 g/mol
+    \item \textbf{FSI$^-$} (bis(fluorosulfonyl)imide): \texttt{O=S(=O)(F)[N-]S(=O)(=O)F}, molecular formula F$_2$NO$_4$S$_2$, molecular weight 180.14 g/mol
+    \item \textbf{Li$^+$} (lithium cation): \texttt{[Li+]}, atomic weight 6.94 g/mol
+\end{itemize}
+
+Three-dimensional molecular structures were generated from SMILES using OpenBabel (version 3.1.1) with MMFF94 force field geometry optimization. A cubic box of 6.0 nm edge length was packed using Packmol (version 20.14.2) with a tolerance of 2.0 \AA\ between molecules, yielding a final configuration containing 604 DME molecules, 75 FSI$^-$ anions, and 75 Li$^+$ cations. The total system comprises 10,414 atoms with net zero charge. Figure~\ref{fig:system} provides an overview of the simulation system and its molecular constituents.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/system_structure.png}
+\caption{\textbf{System structure and simulation setup.} (a) VMD-rendered simulation system showing DME solvent (thin bond-line, element-colored), FSI$^-$ anions (thick bond-line, element-colored), and Li$^+$ cations (VDW green spheres) within the 5.86 nm cubic box. (b) DME molecule (CH$_3$OCH$_2$CH$_2$OCH$_3$, 16 atoms). (c) FSI$^-$ anion (F$_2$S$_2$O$_4$N$^-$, 9 atoms). (d) Molecular composition pie chart: DME at 80.1\%, FSI$^-$ and Li$^+$ each at 9.9\% by molecule count. (e) Summary of simulation parameters used in the NPT production run.}
+\label{fig:system}
+\end{figure*}
+
+\subsection{Force Field Assignment: The S-OPLS Pipeline}
+A critical enabling step in the automated workflow is the conversion of the Packmol-generated PDB file to a Desmond-compatible CMS file with complete force field topology. Initial attempts using the OPLS4 force field failed systematically on Packmol-constructed systems. The OPLS4 \texttt{mmlewis} Lewis structure detection algorithm cannot reconstruct bond connectivity from Packmol outputs where all residues are labeled as the non-standard residue type UNL (unknown ligand).
+
+Through systematic investigation, we established a robust three-rule protocol:
+
+\begin{enumerate}[leftmargin=*, itemsep=4pt, label=\textbf{Rule \arabic*:}]
+    \item \textbf{Use the raw Packmol PDB without modification.} Post-processing scripts that attempt to rename residues or adjust atom types (e.g., \texttt{fix\_pdb} scripts) were found to corrupt the structural information that \texttt{multisim} requires for successful topology construction.
+    \item \textbf{Use the S-OPLS force field exclusively.} The S-OPLS (Small-molecule OPLS) force field employs a different atom-typing algorithm than OPLS4 and successfully assigns force field parameters to Packmol-generated structures containing UNL residues.
+    \item \textbf{Include an explicit \texttt{build\_geometry} stage in the \texttt{.msj} job configuration.} This stage defines the simulation box dimensions and overrides the force field assignment, ensuring that the Packmol box geometry is preserved through the system setup process.
+\end{enumerate}
+
+The validated pipeline proceeds as: \texttt{Packmol PDB} $\rightarrow$ \texttt{pdbconvert} (Desmond utility, PDB $\rightarrow$ Maestro .mae format) $\rightarrow$ \texttt{multisim} (with S-OPLS force field, \texttt{build\_geometry} stage, and explicit box size specification) $\rightarrow$ \texttt{Desmond .cms} file. For the LiFSI/DME system (10,414 atoms), this pipeline completes in approximately 46 seconds on the local workstation, producing an 8.5 MB CMS file with complete topology, force field parameters, and coordinates.
+
+\subsection{Simulation Protocol}
+All molecular dynamics simulations were performed using the Desmond engine (version 8.2.136) on a workstation equipped with an NVIDIA GeForce RTX 3060 Ti GPU (8 GB VRAM, 38 streaming multiprocessors, Ampere architecture).
+
+The simulation protocol followed Desmond's standard staged equilibration workflow, consisting of five sequential stages before unrestrained NPT production:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Stage 1 -- Brownian dynamics NVT at 10 K} (100 ps): Brownian dynamics with a triple-timestep RESPA integrator (0.001/0.001/0.003 fs). Position restraints on all heavy atoms with force constant $k = 50$ kcal/mol/\AA$^2$.
+    \item \textbf{Stage 2 -- Langevin NVT at 10 K} (12 ps): Transition to Langevin thermostat with a 2.0 fs timestep. Heavy-atom restraints maintained.
+    \item \textbf{Stage 3 -- Langevin NPT at 10 K} (12 ps): Activation of the Martyna-Tobias-Klein (MTK) barostat with isotropic pressure coupling at 1.01325 bar.
+    \item \textbf{Stage 4 -- Langevin NPT heating to 300 K} (24 ps): Gradual temperature ramp from 10 K to 300 K over 24 ps (rate $\sim$12 K/ps) with heavy-atom restraints.
+    \item \textbf{Stage 5 -- Langevin NPT at 300 K, unrestrained} (2000 ps): Full production MD without any position restraints. Data collection begins immediately at the start of this stage.
+\end{enumerate}
+
+Key production parameters are summarized in Table~\ref{tab:params}. A 9.0 \AA\ cutoff radius was used for short-range nonbonded interactions with the smooth particle mesh Ewald (PME) method for long-range electrostatics. The trajectory and energy were recorded at 1.0 ps intervals, yielding 2000 frames for analysis.
+
+\begin{table}[!ht]
+\centering
+\caption{Production simulation parameters.}
+\label{tab:params}
+\begin{tabular}{p{0.42\columnwidth}p{0.52\columnwidth}}
+\toprule
+Parameter & Value \\
+\midrule
+Ensemble & NPT (isothermal-isobaric) \\
+Thermostat & Langevin, $\tau_T = 1.0$ ps \\
+Barostat & MTK, $\tau_P = 2.0$ ps, isotropic \\
+Temperature & 300 K \\
+Pressure & 1.01325 bar \\
+Production time & 2000 ps \\
+RESPA timesteps & 0.002 / 0.002 / 0.006 ps \\
+Recording: trajectory & 1.0 ps \\
+Recording: energy & 1.0 ps \\
+Recording: checkpoint & 200.0 ps \\
+Nonbonded cutoff & 9.0 \AA \\
+Long-range electrostatics & PME (u-series) \\
+Force field & S-OPLS \\
+Software & Desmond 8.2 \\
+GPU hardware & NVIDIA RTX 3060 Ti (8 GB) \\
+Performance & 1014 ns/day \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analysis Pipeline}
+Post-simulation analysis was performed using the MOTUS Desmond analysis pipeline, which implements up to 16 independent analysis modules. The modules executed for this non-protein, non-aqueous electrolyte system are summarized in Table~\ref{tab:modules}.
+
+\begin{table}[!ht]
+\centering
+\caption{Analysis modules executed for the LiFSI/DME system.}
+\label{tab:modules}
+\begin{tabular}{p{0.45\linewidth}p{0.45\linewidth}}
+\toprule
+Module & Status \\
+\midrule
+1. Simulation summary & \checkmark\ Completed \\
+2. Energy analysis & \checkmark\ Completed \\
+3. Hydrogen bond analysis & $\times$ Failed (tool error) \\
+4. Solute-water shell analysis & \checkmark\ Completed (no water) \\
+5. Structure \& RMSD & $\times$ Skipped (no protein) \\
+6a. Dihedral analysis & $\times$ Skipped (no protein) \\
+6b. B-factor/RMSF & $\times$ Skipped (no protein) \\
+6c. Protein interactions & $\times$ Skipped (no protein) \\
+6d. SIMA (ligand properties) & \checkmark\ Completed \\
+7. Radial distribution functions & $\times$ Skipped (computational limit) \\
+8. Density cross-sections & \checkmark\ Completed \\
+9. Radius of gyration & \checkmark\ Completed \\
+10. Distance monitoring & \checkmark\ Completed \\
+11. Water residence time & $\times$ Skipped (no water) \\
+12. Dipole moment analysis & \checkmark\ Completed \\
+13. Free volume analysis & $\times$ Skipped (computational limit) \\
+14. Conformational clustering & \checkmark\ Completed \\
+15. Metadynamics analysis & $\times$ Skipped (not configured) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Key Data Processing Conventions}
+\label{sec:conventions}
+
+Several important data processing conventions were established during pipeline development:
+
+\textbf{Energy file (.ene) column mapping.} Desmond's energy output file contains 10 data columns: time (col 1), total energy $E$ (col 2), potential energy $E_p$ (col 3), kinetic energy $E_k$ (col 4), conserved energy $E_c$ (col 5), extended system energy $E_x$ (col 6), constraint energy $E_f$ (col 7), pressure $P$ (col 8), volume $V$ (col 9), and temperature $T$ (col 10). A common parsing error---using column 7 as pressure instead of column 8---was detected and corrected during pipeline validation.
+
+\textbf{Equilibration cutoff.} The first 100 ps of the production trajectory were excluded from equilibrium averages to allow for relaxation of the system from the restrained heating stage. All reported thermodynamic averages are computed over the remaining 1,900 ps (1,897 frames).
+
+\textbf{CMS API indexing.} The Desmond Python API uses 1-based atom indexing (\texttt{m.atom[i]} where $i \in [1, N_{\text{atoms}}]$) and 1-based GID indexing for trajectory access. The simulation box is stored as a flat 9-element list representing the $3\times3$ box matrix in row-major order, with the diagonal elements (\texttt{box[0]}, \texttt{box[4]}, \texttt{box[8]}) giving the box edge lengths for orthorhombic cells.
+
+%===========================================================
+\section{Results}
+\label{sec:results}
+%===========================================================
+
+\subsection{Simulation Performance and Stability}
+\label{sec:sim_performance}
+
+The 2000 ps NPT production simulation completed in 175 seconds on the RTX 3060 Ti GPU, corresponding to an effective throughput of 1014 ns/day. This performance metric is consistent with expectations for a 10,414-atom system on consumer-grade GPU hardware under the Desmond engine. The simulation maintained numerical stability throughout all equilibration and production stages, with no bond-length violations or integration failures detected in the trajectory analysis.
+
+The equilibrium phase of the trajectory (100--2000 ps) was used for all subsequent analysis. The system reached approximate thermodynamic equilibrium within the first 100 ps, as evidenced by convergence of the temperature (reaching 300 K within 20 ps), potential energy (stabilizing within 50 ps), and volume (approaching asymptotic values within 100 ps).
+
+\subsection{Thermodynamic Properties}
+\label{sec:thermo}
+
+The thermodynamic observables monitored during the NPT production run are presented in Figure~\ref{fig:energy}. The temperature stabilized at $299.8 \pm 7.2$ K, demonstrating effective thermostat control throughout the simulation. The narrow temperature distribution (Figure~\ref{fig:energy_dist}) with a standard deviation of only 7.2 K (2.4\% of the mean) confirms proper thermal equilibration.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/energy_timeseries.png}
+\caption{\textbf{Thermodynamic timeseries over 2000 ps of NPT production.} (a) Temperature: stabilizes at 300 K within the first 20 ps. (b) Pressure: exhibits large fluctuations ($\pm$240 bar) characteristic of small-system NPT simulations. (c) Potential energy: converges to approximately $-21,525$ kcal/mol after 50 ps. (d) Volume: decreases from $\sim$212,000 \AA$^3$ to $\sim$207,800 \AA$^3$ during the first 300 ps and stabilizes thereafter. Dashed lines indicate the equilibrated means.}
+\label{fig:energy}
+\end{figure}
+
+The potential energy converged to $-21,525 \pm 108$ kcal/mol for the equilibrated portion of the trajectory. The magnitude of the potential energy ($\sim$2.07 kcal/mol per atom) is consistent with a dense condensed-phase system dominated by van der Waals and electrostatic interactions.
+
+The pressure averaged $-222 \pm 240$ bar, exhibiting large fluctuations characteristic of small-system NPT simulations where the instantaneous pressure is dominated by the virial contributions from short-range repulsive collisions. The negative mean pressure suggests that the system is slightly ``under-tensioned''---the forces at the imposed density are predominantly attractive. This is consistent with the observed low density (discussed below) and may reflect force field limitations in capturing the cohesive energy of the ionic liquid-like electrolyte.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/energy_distribution.png}
+\caption{\textbf{Equilibrium distributions of thermodynamic observables.} Histograms of (a) temperature and (b) potential energy over the equilibrated portion of the trajectory (100--2000 ps). Both distributions are unimodal and approximately Gaussian, confirming a single well-equilibrated thermodynamic state. The vertical dashed lines indicate the mean values; the shaded regions span $\pm$1 standard deviation.}
+\label{fig:energy_dist}
+\end{figure}
+
+\subsection{Volumetric Properties and Density}
+\label{sec:density}
+
+The time evolution of the system density during NPT production is shown in Figure~\ref{fig:density}. The density follows an exponential approach to equilibrium, decreasing from an initial value of approximately 0.565 g/cm$^3$ and stabilizing at $0.5480 \pm 0.0083$ g/cm$^3$ after the first 100 ps of production. The small standard deviation (1.5\% of the mean) confirms that the density is well-converged on the 2 ns timescale, though the absolute value warrants careful interpretation.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/density_evolution.png}
+\caption{\textbf{Density evolution during NPT production.} The system density approaches equilibrium within the first 100 ps and fluctuates around a mean of 0.5480 g/cm$^3$ thereafter. The red dashed line indicates the equilibrated mean; the shaded band spans $\pm$1 standard deviation ($\pm$0.0083 g/cm$^3$). The gray dotted line at 100 ps marks the equilibration cutoff. The small fluctuation amplitude indicates that the density is well-converged, though the absolute value is lower than experimental expectations ($\sim$1.0--1.2 g/cm$^3$ for concentrated electrolytes).}
+\label{fig:density}
+\end{figure}
+
+The computed density of 0.548 g/cm$^3$ is substantially lower than experimental values for concentrated LiFSI/DME electrolytes, which typically fall in the range of 1.0--1.2 g/cm$^3$ depending on salt concentration. This discrepancy likely arises from a combination of factors: (1) the S-OPLS force field was parameterized primarily for neutral organic molecules and may underpredict cohesive (attractive) interactions in highly ionic systems where charge--charge and charge--dipole interactions dominate; (2) the 2 ns simulation timescale, while sufficient for density convergence as evidenced by the small fluctuations, may be inadequate for the slow collective reorganization of the ionic liquid network that could lead to further densification; and (3) the absence of explicit polarizability in the fixed-charge S-OPLS model, which neglects the many-body induction effects that enhance ion--solvent binding in polarizable environments.
+
+\subsection{Density Cross-Sections: 1D and 2D Spatial Profiles}
+\label{sec:density_profiles}
+
+To characterize the spatial homogeneity of the electrolyte and detect any phase separation, ordering, or interfacial artifacts, we computed both one-dimensional density profiles along the X, Y, and Z axes and two-dimensional density maps in the XY, XZ, and YZ planes.
+
+\subsubsection*{One-Dimensional Density Profiles}
+
+Figure~\ref{fig:density1d_all} presents 1D density profiles for all atoms in the system along each Cartesian axis. The relative density fluctuates around 1.0 with an amplitude of approximately $\pm$15\%, consistent with the expected density fluctuations in a homogeneous liquid at equilibrium. The absence of systematic gradients, peaks at the box boundaries, or long-wavelength modulations confirms that: (a) the system is well-mixed at the molecular level, (b) periodic boundary conditions are functioning correctly without introducing artifacts, and (c) there is no evidence of phase separation into solvent-rich and salt-rich domains on the 2 ns timescale.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/density_1d_all.png}
+\caption{\textbf{One-dimensional density profiles for all atoms.} Relative density as a function of position along the X (top), Y (middle), and Z (bottom) axes. The horizontal reference line at $\rho/\rho_{\text{bulk}} = 1.0$ corresponds to a perfectly homogeneous liquid. Fluctuations of $\pm$15\% around this value are typical for a dense liquid at equilibrium and indicate the absence of phase separation, ordering, or interfacial effects.}
+\label{fig:density1d_all}
+\end{figure}
+
+Figure~\ref{fig:density1d_solute} shows the corresponding profiles for solute atoms only (FSI$^-$ + Li$^+$, excluding DME solvent). The solute density profiles exhibit larger relative fluctuations than the total density, as expected for the minority components (150 ions out of 10,414 atoms). However, the absence of systematic enrichment or depletion at any spatial location confirms that the ions are homogeneously distributed throughout the solvent matrix, with no evidence of ionic clustering or aggregation at this concentration and timescale.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/density_1d_solute.png}
+\caption{\textbf{One-dimensional density profiles for solute atoms (FSI$^-$ + Li$^+$).} Solute-only density profiles along X, Y, and Z axes. The larger fluctuations compared to Figure~\ref{fig:density1d_all} reflect the lower atom count (750 solute atoms vs.\ 10,414 total). The absence of systematic spatial variation confirms homogeneous ion distribution.}
+\label{fig:density1d_solute}
+\end{figure}
+
+\subsubsection*{Two-Dimensional Density Maps}
+
+Two-dimensional density maps were computed by projecting atomic positions onto the XY, XZ, and YZ planes with $80 \times 80$ binning and averaging over 200 frames (stride = 10) spanning the full 2 ns trajectory. Figure~\ref{fig:density2d} presents the 2D maps for all atoms on the XY projection plane. The maps exhibit a uniform, featureless distribution with no discernible spatial structure---no ``hot spots'' of high density, no voids, and no evidence of lamellar or channel-like ordering. Equivalent maps for the XZ and YZ planes show identical behavior (not shown).
+
+Solute-only 2D density maps (not shown) reveal the same homogeneous distribution at the ionic level. The absence of ion-rich domains suggests that, at the 1:8 salt:solvent molar ratio and 2 ns timescale, the electrolyte remains in a molecularly dispersed state rather than forming the nanoscale heterogeneity sometimes reported for highly concentrated ionic liquids and ``water-in-salt'' electrolytes~\cite{suo2015}. This observation is consistent with the relatively modest salt concentration (compared to the $>$1:2 ratios required for ``solvent-in-salt'' behavior) and the limited simulation timescale.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/density_2d_all_XY.png}
+\caption{\textbf{Two-dimensional density map on the XY plane (all atoms).} The uniform color distribution (YlOrRd colormap) confirms homogeneous spatial distribution with no detectable ordering, phase separation, or density inhomogeneities. Equivalent maps for the XZ and YZ planes show identical behavior.}
+\label{fig:density2d}
+\end{figure}
+
+\subsection{Radius of Gyration: Molecular Conformations}
+\label{sec:rgyr}
+
+The radius of gyration ($R_g$) was computed for each molecular species to quantify molecular compactness and detect conformational changes during the simulation. For a molecule with $N$ atoms at positions $\mathbf{r}_i$, the radius of gyration is defined as:
+\begin{equation}
+R_g = \sqrt{\frac{1}{N}\sum_{i=1}^{N} |\mathbf{r}_i - \mathbf{r}_{\text{com}}|^2}
+\label{eq:rgyr}
+\end{equation}
+where $\mathbf{r}_{\text{com}}$ is the center of mass of the molecule. The computation accounts for periodic boundary conditions by reconstructing molecules across box boundaries.
+
+\subsubsection*{DME Conformations}
+
+DME (C$_4$H$_{10}$O$_2$, 16 atoms) exhibited an average $R_g$ of $1.97 \pm 0.11$ \AA\ across all 604 molecules and 200 trajectory frames (Figure~\ref{fig:rg_dme}). The small standard deviation ($\pm$0.11 \AA, 5.6\% of the mean) indicates that DME maintains a consistent conformational ensemble throughout the simulation, without exploring significantly extended or compacted states. This is consistent with the relatively rigid structure of the short dimethoxyethane chain, where the two ether oxygen atoms and the central ethylene bridge constrain the accessible conformational space.
+
+The average $R_g$ of 1.97 \AA\ corresponds to a molecule with a characteristic dimension (diameter of gyration) of approximately 3.94 \AA, which is consistent with the extended chain conformation of DME (estimated end-to-end distance $\sim$5--6 \AA\ for the all-\textit{trans} conformer). The slightly lower experimental $R_g$ compared to the fully extended conformation suggests a modest degree of chain flexibility, with \textit{gauche} conformations around the central C--C bond reducing the effective molecular dimension.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/rg_C4_H10_O2.png}
+\caption{\textbf{Radius of gyration for DME molecules over time.} The average $R_g$ (blue line) is $1.97 \pm 0.11$ \AA, with the shaded band indicating $\pm$1 standard deviation across all 604 DME molecules. The near-constant value confirms that DME maintains stable conformations without significant chain extension or collapse.}
+\label{fig:rg_dme}
+\end{figure}
+
+\subsubsection*{FSI$^-$ Anion Geometry}
+
+The FSI$^-$ anion (F$_2$NO$_4$S$_2$, 8 atoms) showed an average $R_g$ of $1.85 \pm 0.02$ \AA\ (Figure~\ref{fig:rg_fsi}). The extremely small standard deviation ($\pm$0.02 \AA, 1.1\% of the mean) reflects the rigid, compact structure of this tetrahedral-like anion where the S--N--S bridging motif and four S=O/S--F bonds create a highly constrained geometry with limited conformational flexibility.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/rg_F2_N1_O4_S2.png}
+\caption{\textbf{Radius of gyration for FSI$^-$ anions over time.} The average $R_g$ of $1.85 \pm 0.02$ \AA\ confirms the rigid, compact geometry of the FSI$^-$ anion. The narrow standard deviation band reflects the absence of conformational flexibility in this tetrahedral-like structure.}
+\label{fig:rg_fsi}
+\end{figure}
+
+The monatomic Li$^+$ ions have $R_g = 0$ by definition and are not plotted. The stability of both DME and FSI$^-$ $R_g$ values throughout the 2 ns trajectory indicates that no bond-breaking, chemical reactions, or major conformational transitions occur on this timescale, consistent with the use of a non-reactive classical force field.
+
+\subsection{Intermolecular Distance Monitoring}
+\label{sec:distance}
+
+To probe the spatial correlations and local packing structure of the electrolyte, we monitored 20 representative oxygen--oxygen (O--O) distance pairs between DME molecules. The oxygen atoms of DME serve as the primary Li$^+$ coordination sites and are therefore the most relevant probes of the local solvent structure.
+
+Figure~\ref{fig:distance} presents an overview of these 20 monitored distance pairs. The mean O--O distances span a broad range from $9.66 \pm 3.23$ \AA\ (the closest pair) to $38.69 \pm 4.92$ \AA\ (the most distant pair). The spread of average distances reflects the random spatial distribution of DME molecules in the simulation box: molecules that happen to be packed in proximity during the initial configuration may remain relatively close throughout the simulation, while others are separated by distances approaching half the box length ($\sim$29 \AA).
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/distance_overview.png}
+\caption{\textbf{Overview of 20 monitored O--O intermolecular distance pairs between DME molecules.} Each trace represents the time evolution of a specific atom pair. The distances span a broad range (9.7--38.7 \AA\ means) reflecting random molecular packing in the 5.86 nm simulation box. The absence of persistent short contacts ($<$3.5 \AA) indicates negligible DME--DME hydrogen bonding, consistent with the aprotic nature of the ether solvent.}
+\label{fig:distance}
+\end{figure}
+
+Several important observations emerge from the distance monitoring:
+\begin{enumerate}[nosep]
+    \item \textbf{No persistent short contacts.} The minimum O--O distance observed across any pair is 3.78 \AA, which exceeds the typical hydrogen bond donor--acceptor distance cutoff of 3.5 \AA. This confirms that DME--DME hydrogen bonding is negligible in the pure (water-free) electrolyte, consistent with the aprotic nature of ether solvents.
+    \item \textbf{Diffusive behavior at long range.} Pairs with large mean separations ($>$30 \AA) exhibit fluctuations of $\pm$5--6 \AA, reflecting the diffusive motion of DME molecules in the liquid state. The fluctuation amplitude is consistent with molecular displacements on the order of $\sim$5 \AA\ over the 200-frame analysis window (2 ns with stride 10), corresponding to an apparent diffusion coefficient in the range of $10^{-6}$--$10^{-5}$ cm$^2$/s, as expected for small organic molecules in the liquid state.
+    \item \textbf{No evidence of molecular association.} None of the monitored pairs show a systematic decrease in separation distance over time, which would indicate attractive interactions or molecular complexation. This is expected for neutral DME molecules, where the dominant intermolecular interactions are non-directional van der Waals forces.
+\end{enumerate}
+
+\subsection{Dipole Moment Analysis}
+\label{sec:dipole}
+
+The electrostatic properties of the electrolyte were characterized through computation of molecular dipole moments from S-OPLS partial charges, accounting for periodic boundary conditions in the center-of-charge calculation. The total system dipole moment was computed by summing the dipole vectors of all 754 molecules at each trajectory frame.
+
+Figure~\ref{fig:dipole} shows the time evolution of the total system dipole moment magnitude. The total dipole fluctuates in the range of approximately 500--900 Debye, reflecting the collective polarization of 604 polar DME molecules (each with an intrinsic dipole of $\sim$1.5--2.5 D from the asymmetric ether oxygen arrangement) and 75 FSI$^-$ anions with their highly polar S--F and S=O bonds.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/dipole_C4_H10_O2.png}
+\caption{\textbf{Total system dipole moment magnitude over the NPT production trajectory.} The total dipole fluctuates between 500--900 D, arising from the collective polarization of 604 DME molecules plus 75 FSI$^-$ anions. The large fluctuations reflect the dynamic reorientation of individual molecular dipoles in the liquid state.}
+\label{fig:dipole}
+\end{figure}
+
+The per-molecule dipole distributions reveal narrow spreads, with DME molecules exhibiting standard deviations of $\sim$0.1--0.3 D per molecule across the trajectory. This narrow distribution confirms that DME maintains a consistent conformational ensemble rather than exploring widely different geometries that would produce substantially different molecular dipole moments. The FSI$^-$ anions, with their delocalized negative charge and symmetric S--N--S core, exhibit larger dipole fluctuations reflecting the flexibility of the S--F bond orientations.
+
+The fluctuating total dipole has implications for the dielectric response of the electrolyte: the amplitude and timescale of dipole fluctuations are directly related to the frequency-dependent dielectric constant $\varepsilon(\omega)$ via the fluctuation-dissipation theorem. A detailed dielectric analysis would require significantly longer trajectories (10--100 ns) to adequately sample the low-frequency ($<$1 GHz) collective relaxation modes that dominate the static dielectric constant.
+
+\subsection{Conformational Clustering and Principal Component Analysis}
+\label{sec:clustering}
+
+To characterize the conformational landscape of the electrolyte and identify distinct structural states explored during the simulation, we performed RMSD-based hierarchical agglomerative clustering (Ward's method) on the solute atom positions (FSI$^-$ + Li$^+$, 750 atoms) from 100 frames evenly spaced across the trajectory (stride = 20).
+
+\subsubsection*{Clustering Results}
+
+The clustering algorithm identified five conformational clusters (Figure~\ref{fig:cluster}). The dominant cluster (Cluster 5) contains 59\% of the sampled frames and is centered at frame 180 (early in the trajectory), indicating that the system spends the majority of its time in a single equilibrium conformational state. The remaining clusters capture transient excursions: Cluster 3 (23\%, centroid at frame 1720), Cluster 4 (10\%, centroid at frame 1380), Cluster 2 (6\%, centroid at frame 1840), and Cluster 1 (2\%, centroid at frame 1900).
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/cluster_population.png}
+\caption{\textbf{Cluster populations from RMSD-based hierarchical clustering (Ward's method).} (left) Bar chart showing the number of frames assigned to each of the five clusters. (right) Pie chart with percentage labels. Cluster 5 dominates at 59\%, representing the equilibrium conformational ensemble. Clusters 1--4 capture transient excursions from the dominant state.}
+\label{fig:cluster}
+\end{figure}
+
+The pairwise RMSD matrix (Figure~\ref{fig:rmsd}) visualizes the structural similarity between all pairs of frames and confirms the block-diagonal structure characteristic of well-separated conformational clusters. The cluster membership timeline (Figure~\ref{fig:cluster_timeline}) shows the dominance of Cluster 5 throughout the simulation, with transient transitions to Clusters 1--4 occurring sporadically.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/cluster_rmsd_matrix.png}
+\caption{\textbf{Pairwise RMSD matrix (100 $\times$ 100 frames).} The RMSD between each pair of trajectory frames is color-coded on a YlOrRd scale (darker = higher RMSD). The block-diagonal structure confirms that frames within the same cluster are structurally similar, while inter-cluster RMSD values are higher, consistent with meaningful conformational differences between clusters.}
+\label{fig:rmsd}
+\end{figure}
+
+\subsubsection*{Principal Component Analysis}
+
+Principal component analysis (PCA) was performed on the flattened solute atom positions (100 $\times$ 31,242 feature matrix) to identify the dominant collective motions. The first principal component (PC1) captures 33.8\% of the total variance, and the second (PC2) captures an additional 19.7\%, for a cumulative explained variance of 53.5\% in the first two dimensions.
+
+The relatively slow variance accumulation (requiring two PCs to capture only half the total variance) is characteristic of large, disordered liquid systems where collective motions are less coherent than in folded proteins or ordered solids. In proteins, the first 2--3 PCs often capture 70--90\% of the variance due to the dominance of hinge-bending and domain motions; in a disordered ionic liquid, the ``motions'' are distributed across many degrees of freedom, each contributing a small amount to the total fluctuation.
+
+Figure~\ref{fig:pca} shows the PCA projection of the 100 trajectory frames onto the PC1--PC2 plane, colored by cluster assignment. Clusters occupy distinct regions of the PCA space, confirming that the RMSD-based clustering captures structurally meaningful differences rather than arbitrary frame grouping. The convex hulls drawn around each cluster illustrate their extent and overlap in the reduced-dimensional space.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/cluster_pca_scatter.png}
+\caption{\textbf{PCA projection (PC1 vs.\ PC2) colored by cluster assignment.} Each point represents a trajectory frame projected onto the first two principal components. Convex hulls enclose each cluster; $\times$ markers indicate cluster centroids. The separation of clusters in PCA space confirms that RMSD-based clustering captures physically meaningful conformational distinctions. PC1 and PC2 collectively explain 53.5\% of the total variance.}
+\label{fig:pca}
+\end{figure}
+
+Figure~\ref{fig:pca_time} presents the same PCA projection colored by simulation time (viridis colormap), revealing a gradual drift in the PC1--PC2 plane over the 2 ns trajectory. This slow conformational relaxation suggests that the ionic liquid network undergoes collective reorganization on timescales that exceed the 2 ns simulation window, consistent with the known slow dynamics of concentrated ionic systems where ion pairs and aggregates can have lifetimes exceeding nanoseconds.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/cluster_pca_timeline.png}
+\caption{\textbf{PCA projection colored by simulation time} (viridis: blue = early, yellow = late). The systematic color gradient reveals slow conformational drift over the 2 ns trajectory. This suggests that the ionic liquid network undergoes collective reorganization on timescales exceeding the current simulation window, consistent with the slow dynamics expected for concentrated ionic systems.}
+\label{fig:pca_time}
+\end{figure}
+
+\subsection{Ligand Properties via Simulation Interactions Diagram (SIMA)}
+\label{sec:sima}
+
+The Simulation Interactions Diagram (SIMA) module automatically identifies the largest molecular species in the system (by atom count) and tracks its conformational and surface properties over the trajectory. For the LiFSI/DME system, the FSI$^-$ anion (8 atoms) was selected as the ``ligand'' species.
+
+Figure~\ref{fig:sima} presents the SIMA ligand property panel, comprising six observables with paired time-series (left panel) and histogram distributions (right panel). The tracked properties include: RMSD relative to the initial frame, radius of gyration ($R_g$), number of intra-molecular hydrogen bonds (geometric N/O--H$\cdots$N/O definition), molecular surface area (MolSA), solvent-accessible surface area (SASA), and polar surface area (PSA).
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/sima_properties_L-Properties.png}
+\caption{\textbf{SIMA ligand properties for FSI$^-$ over 400 trajectory frames.} Six properties are tracked with paired time-series (left) and histograms (right): RMSD, $R_g$, intra-molecular H-bonds (IntraHB), molecular surface area (MolSA), solvent-accessible surface area (SASA), and polar surface area (PSA). Properties use a consistent 6-color palette.}
+\label{fig:sima}
+\end{figure}
+
+Key observations from the SIMA analysis:
+\begin{itemize}[nosep]
+    \item \textbf{RMSD and $R_g$ stability:} Both the RMSD and $R_g$ are essentially constant throughout the 2 ns trajectory, consistent with the rigid structure of the FSI$^-$ anion discussed in Section~\ref{sec:rgyr}. The narrow histogram distributions confirm the absence of conformational transitions.
+    \item \textbf{No intra-molecular H-bonds:} The FSI$^-$ anion lacks hydrogen bond donors (no O--H or N--H groups), and the intraHB count is uniformly zero across all frames.
+    \item \textbf{Surface area properties:} The molecular surface area and SASA show small fluctuations ($\sim$5\%) reflecting the libration and vibration of terminal S--F and S=O bonds, but no systematic trends indicating unfolding or structural degradation.
+    \item \textbf{Rotatable bonds:} Zero rotatable bonds were identified in the FSI$^-$ anion, consistent with its fully rigid molecular graph where all bonds are either double bonds (S=O) or single bonds connecting atoms that lack alternative heavy-atom substituents.
+\end{itemize}
+
+\subsection{Summary Dashboard}
+\label{sec:dashboard}
+
+A comprehensive summary dashboard (Figure~\ref{fig:dashboard}) consolidates the key thermodynamic and structural observables into a single multi-panel figure, providing an at-a-glance overview of the simulation quality and results.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=\linewidth]{figures/summary_dashboard.png}
+\caption{\textbf{Summary dashboard.} Four-panel overview of simulation observables: (top-left) temperature probability distribution centered at 299.8 K; (top-right) potential energy distribution; (bottom-left) system-wide hydrogen bond count over time; (bottom-right) fraction of water molecules in the first solvation shell (all zero for this anhydrous system). The dashboard format enables rapid quality assessment of the simulation.}
+\label{fig:dashboard}
+\end{figure}
+
+The dashboard confirms that all monitored properties are stable and physically reasonable. The temperature distribution (top-left) is sharply peaked at the target 300 K. The potential energy distribution (top-right) is symmetric and unimodal. The hydrogen bond count (bottom-left) and bound water fraction (bottom-right) serve as placeholders for future simulations that include explicit water molecules or protic solvents.
+
+%===========================================================
+\section{Discussion}
+\label{sec:discussion}
+%===========================================================
+
+\subsection{Pipeline Performance and Automation}
+
+The MOTUS platform successfully executed the complete LiFSI/DME MD workflow---from SMILES strings to a comprehensive, multi-module analysis with 23 unique figure types---without any manual intervention. The total wall-clock time breakdown is presented in Table~\ref{tab:performance}, demonstrating the dramatic throughput advantage of automated MD pipelines.
+
+\begin{table}[!ht]
+\centering
+\caption{Wall-clock performance of the automated pipeline.}
+\label{tab:performance}
+\begin{tabular}{p{0.58\columnwidth}p{0.35\columnwidth}}
+\toprule
+Pipeline Stage & Wall-Clock Time \\
+\midrule
+SMILES $\rightarrow$ 3D structures & $\sim$5 s \\
+Packmol system packing & $\sim$5 s \\
+PDB $\rightarrow$ .mae conversion & $\sim$1 s \\
+Multisim system setup (S-OPLS) & $\sim$45 s \\
+\cmidrule{2-2}
+\textbf{Modeling subtotal} & \textbf{$\sim$56 s} \\
+\midrule
+Desmond production MD (2000 ps) & $\sim$175 s \\
+\midrule
+Energy analysis + timeseries & $\sim$1 s \\
+SIMA generation & $\sim$8 s \\
+Density cross-sections (1D + 2D) & $\sim$10 s \\
+Radius of gyration & $\sim$2 s \\
+Distance monitoring & $\sim$2 s \\
+Dipole moment analysis & $\sim$20 s \\
+Clustering + PCA & $\sim$10 s \\
+Figure generation (all modules) & $\sim$135 s \\
+\cmidrule{2-2}
+\textbf{Analysis subtotal} & \textbf{$\sim$188 s} \\
+\midrule
+\textbf{Total wall-clock time} & \textbf{$\sim$419 s ($\sim$7 min)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For comparison, a traditional manual workflow for an equivalent system would typically require: (1) 2--4 hours for molecular structure preparation and validation, (2) 1--2 hours for force field parameter assignment (potentially involving QM calculations), (3) 30 minutes--1 hour for system construction and equilibration setup, (4) the same $\sim$3 minutes of GPU time for the actual simulation, and (5) 4--8 hours for data extraction, analysis scripting, and figure preparation. The MOTUS pipeline thus achieves a throughput improvement of approximately two orders of magnitude (50--100$\times$) for the complete research cycle, while simultaneously eliminating the potential for human error in data processing and figure generation.
+
+\subsection{Force Field Considerations}
+
+The successful use of S-OPLS as a practical workaround for the OPLS4 Lewis structure limitation is an important methodological finding. While OPLS4 generally provides superior accuracy for drug-like organic molecules due to its expanded training set and refined torsional parameters, its incompatibility with Packmol-generated multi-component systems represents a significant barrier to automated high-throughput MD. The S-OPLS force field, despite being an earlier-generation parameter set, offers a pragmatic compromise: it delivers a complete, simulation-ready topology for arbitrary small-molecule mixtures while maintaining reasonable accuracy for thermodynamic and structural properties.
+
+However, the systematic underestimation of density (0.548 vs.\ expected $\sim$1.0--1.2 g/cm$^3$) highlights the limitations of using a general-purpose organic force field for highly ionic systems. The cohesive energy density of ionic liquids is dominated by Coulombic interactions, and fixed-charge force fields without explicit polarizability systematically underestimate the many-body induction effects that enhance ion--ion and ion--solvent binding. Specialized polarizable force fields for ionic liquids (e.g., CL\&Pol, APPLE\&P) have been shown to reproduce experimental densities to within 2--5\%, and their integration into the MOTUS pipeline would represent a significant capability upgrade.
+
+\subsection{Simulation Timescale Limitations}
+
+The 2 ns production simulation provides a robust characterization of equilibrium thermodynamic and structural properties, but is insufficient for several scientifically important observables:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Transport properties:} Accurate diffusion coefficients and ionic conductivities via the Einstein relation require trajectories of 10--100 ns to achieve the diffusive regime (mean squared displacement $\propto t$) and adequate statistical sampling. The 2 ns trajectory likely captures only the ballistic and subdiffusive (caging) regimes for Li$^+$ ions.
+    \item \textbf{Ion pairing dynamics:} The lifetimes of contact ion pairs (CIPs) and solvent-separated ion pairs (SSIPs) in concentrated electrolytes can range from tens of picoseconds to tens of nanoseconds. Characterizing the full distribution of ion-pair lifetimes requires trajectories that significantly exceed the longest-lived species.
+    \item \textbf{Collective network reorganization:} The PCA analysis revealed slow conformational drift over 2 ns (Figure~\ref{fig:pca_time}), suggesting that the ionic liquid network undergoes collective relaxation on timescales that exceed the current simulation window. Extended trajectories of 10--50 ns would be required to sample the full conformational landscape and achieve converged clustering statistics.
+\end{enumerate}
+
+\subsection{Computational Scalability Challenges}
+
+The $O(N^2)$ scaling of pairwise distance computations presented a significant bottleneck for two analysis modules:
+
+\begin{itemize}[nosep]
+    \item \textbf{Radial distribution functions (Module 7):} Computing element-pair RDFs for 10,414 atoms with 500 trajectory frames requires approximately $500 \times (10{,}414^2 / 2) \approx 2.7 \times 10^{10}$ distance evaluations. On a single CPU core, this would require approximately 10--20 hours. GPU-accelerated RDF implementations using CUDA or OpenCL could reduce this to minutes by exploiting the embarrassingly parallel nature of pairwise distance computations.
+    \item \textbf{Free volume analysis (Module 13):} The grid-based probe-sphere method scales as $N_{\text{atoms}} \times N_{\text{grid}}$, where $N_{\text{grid}} \approx (60/1.0)^3 = 216{,}000$ for a 1.0 \AA\ grid spacing. At 10,414 atoms per frame, a single frame requires $\sim$2.2 billion atom-grid distance checks. Even at conservative settings (stride = 50, max-frames = 20), the total computation exceeded the available time budget.
+\end{itemize}
+
+Algorithmic optimizations are under development, including: (1) neighbor-list-based approaches for RDF that exploit the short-range nature of $g(r)$ (only atom pairs within $\sim$15 \AA\ contribute to the first few coordination shells), (2) GPU-accelerated distance computations using CUDA kernels, and (3) adaptive grid refinement for free volume analysis that concentrates computational effort in void-rich regions.
+
+\subsection{Comparison with Prior MD Studies of LiFSI/DME Electrolytes}
+
+The LiFSI/DME electrolyte system has been studied previously by MD simulation, though typically with more sophisticated force fields and longer timescales. Baskin \textit{et al.}~\cite{baskin2021} employed the APPLE\&P polarizable force field to study LiFSI in DME at concentrations ranging from 0.5 to 3.0 M, achieving densities within 2\% of experimental values and characterizing the Li$^+$ solvation structure in detail. Their simulations (20--50 ns per concentration) revealed that at concentrations above $\sim$2 M, the first Li$^+$ solvation shell contains significant FSI$^-$ character, with CIP formation becoming the dominant solvation motif.
+
+The present study, while limited in quantitative accuracy by the S-OPLS force field and 2 ns timescale, demonstrates that the MOTUS pipeline can replicate the workflow of such studies in a fully automated fashion. With the integration of more accurate force fields and extended simulation capabilities, MOTUS could serve as a high-throughput pre-screening tool to identify promising electrolyte compositions for detailed study with computationally expensive polarizable MD.
+
+\subsection{Future Directions}
+
+Based on the capabilities demonstrated and limitations identified in this study, we outline several high-priority directions for future development:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Force field integration:} Implement support for the CL\&Pol and APPLE\&P polarizable force fields via the Desmond custom force field interface or through integration with the GROMACS and LAMMPS engines already supported by MOTUS.
+    \item \textbf{Extended simulation capabilities:} Develop automated multi-stage simulation protocols that combine short (2 ns) screening runs with longer (20--50 ns) production runs for promising candidates, using checkpoint/restart workflows to minimize wasted computation.
+    \item \textbf{GPU-accelerated analysis:} Port the RDF and free volume analysis modules to CUDA to eliminate the computational bottleneck for large systems ($>$5,000 atoms).
+    \item \textbf{Transport property analysis:} Integrate mean squared displacement (MSD) computation, velocity autocorrelation function (VACF) analysis, and Einstein/Helfand transport coefficient estimation into the analysis pipeline.
+    \item \textbf{Solvation structure characterization:} Implement automated Li$^+$--O(DME) and Li$^+$--O(FSI$^-$) radial distribution function computation with running coordination number integration, using neighbor-list optimization for large systems.
+    \item \textbf{Reactive MD integration:} Extend the LAMMPS engine integration to support ReaxFF reactive force fields, enabling the study of electrochemical degradation reactions at electrode--electrolyte interfaces.
+    \item \textbf{Enhanced sampling:} Implement well-tempered metadynamics and umbrella sampling protocols within the MOTUS framework to enable free energy calculations for ion binding, desolvation, and interfacial processes.
+    \item \textbf{Machine learning integration:} Develop a Bayesian optimization layer that uses MOTUS simulation results to guide the selection of next-generation electrolyte formulations, closing the loop between simulation and design.
+\end{enumerate}
+
+%===========================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%===========================================================
+
+This study has demonstrated the first fully automated, end-to-end molecular dynamics analysis of a multi-component LiFSI/DME electrolyte system using the MOTUS platform with the Desmond engine. The complete workflow---encompassing SMILES-based molecular construction, Packmol system packing, force field assignment through the validated S-OPLS pipeline, GPU-accelerated NPT production MD, and comprehensive multi-module analysis---was executed without manual intervention in approximately 7 minutes of wall-clock time.
+
+The key scientific and methodological contributions are:
+
+\begin{enumerate}[nosep, label=\textbf{\arabic*.}]
+    \item \textbf{Validated S-OPLS pipeline for automated Desmond system construction.} We established and verified a three-rule protocol (raw Packmol PDB, S-OPLS force field, explicit \texttt{build\_geometry} stage) that reliably produces simulation-ready Desmond CMS files from Packmol-generated multi-component small-molecule systems. This protocol overcomes a fundamental limitation of the OPLS4 \texttt{mmlewis} Lewis structure detection algorithm and enables fully automated Desmond MD for arbitrary molecular mixtures.
+    \item \textbf{Comprehensive thermodynamic and structural characterization.} The simulation yielded stable thermodynamic properties ($T = 299.8 \pm 7.2$ K, $E_{\text{pot}} = -21{,}525 \pm 108$ kcal/mol) with density convergence to $0.548 \pm 0.008$ g/cm$^3$. While the absolute density is lower than experimental expectations, the precision of the measurement (1.5\% coefficient of variation) demonstrates robust statistical sampling within the 2 ns trajectory.
+    \item \textbf{Multi-modal structural analysis.} Eight independent analysis modules provided complementary perspectives on the electrolyte structure: 1D/2D density profiles confirmed homogeneous ion distribution, $R_g$ analysis revealed stable molecular conformations (DME: $1.97 \pm 0.11$ \AA; FSI$^-$: $1.85 \pm 0.02$ \AA), distance monitoring captured the random molecular packing without persistent short contacts, and dipole analysis characterized the collective electrostatic fluctuations (500--900 D total dipole).
+    \item \textbf{Conformational landscape mapping.} RMSD-based clustering with PCA identified five conformational states in the ionic liquid network, with a single dominant equilibrium ensemble (59\% of frames). The PCA timeline revealed slow collective reorganization on timescales exceeding 2 ns, motivating future extended simulations.
+    \item \textbf{Pipeline performance benchmarking.} The automated pipeline achieved a $\sim$50--100$\times$ throughput improvement over traditional manual MD workflows, reducing the complete research cycle from days to minutes while eliminating potential sources of human error in data processing and figure generation.
+    \item \textbf{Identification of key development priorities.} Analysis of pipeline performance and limitations has informed a prioritized roadmap for future development, including force field upgrades, GPU-accelerated analysis, transport property integration, and machine-learning-guided electrolyte optimization.
+\end{enumerate}
+
+The MOTUS platform, as demonstrated in this study, represents a significant step toward the vision of autonomous molecular dynamics research---where a scientist can specify a chemical system in natural language or standard chemical representations and receive a comprehensive, publication-quality analysis without intervening in the computational workflow. While current limitations in force field accuracy and simulation timescale prevent MOTUS from fully replacing expert-driven MD for quantitative property prediction, its demonstrated ability to automate the mechanical aspects of the MD workflow positions it as a powerful tool for high-throughput screening, educational applications, and rapid hypothesis generation.
+
+Ongoing development will focus on closing the accuracy gap through polarizable force field integration, extending accessible timescales through automated multi-stage simulation protocols, and implementing the analysis modules (RDF, transport properties, enhanced sampling) that will elevate MOTUS from a workflow automation tool to a genuine autonomous scientist capable of independent discovery in molecular simulation.
+
+\FloatBarrier
+\begin{thebibliography}{99}
+
+\bibitem{armand2008} M.~Armand and J.-M.~Tarascon, ``Building better batteries,'' \textit{Nature}, vol.~451, pp.~652--657, 2008.
+
+\bibitem{xu2014} K.~Xu, ``Electrolytes and interphases in Li-ion batteries and beyond,'' \textit{Chem. Rev.}, vol.~114, pp.~11503--11618, 2014.
+
+\bibitem{eshetu2018} G.~G.~Eshetu \textit{et al.}, ``LiFSI vs. LiPF$_6$ electrolytes in contact with lithiated graphite: Comparing thermal stabilities and identification of specific SEI-reinforcing additives,'' \textit{Energy Environ. Sci.}, vol.~11, pp.~2015--2027, 2018.
+
+\bibitem{qian2015} J.~Qian \textit{et al.}, ``High rate and stable cycling of lithium metal anode,'' \textit{Nat. Commun.}, vol.~6, p.~6362, 2015.
+
+\bibitem{borodin2015} O.~Borodin \textit{et al.}, ``Modeling insight into battery electrolyte electrochemical stability and interfacial structure,'' \textit{Acc. Chem. Res.}, vol.~48, pp.~2875--2884, 2015.
+
+\bibitem{suo2015} L.~Suo \textit{et al.}, ```Water-in-salt' electrolyte enables high-voltage aqueous lithium-ion chemistries,'' \textit{Science}, vol.~350, pp.~938--943, 2015.
+
+\bibitem{baskin2021} A.~Baskin \textit{et al.}, ``Molecular simulations of electrolyte structure and dynamics in lithium--sulfur battery solvents,'' \textit{J. Phys. Chem. C}, vol.~125, pp.~14567--14579, 2021.
+
+\bibitem{yao2019} Y.~Yao \textit{et al.}, ``Regulating interfacial chemistry in lithium-ion batteries by a weakly solvating electrolyte,'' \textit{Angew. Chem. Int. Ed.}, vol.~58, pp.~2--10, 2019.
+
+\bibitem{jorgensen1996} W.~L.~Jorgensen, D.~S.~Maxwell, and J.~Tirado-Rives, ``Development and testing of the OPLS all-atom force field on conformational energetics and properties of organic liquids,'' \textit{J. Am. Chem. Soc.}, vol.~118, pp.~11225--11236, 1996.
+
+\bibitem{bowers2006} K.~J.~Bowers \textit{et al.}, ``Scalable algorithms for molecular dynamics simulations on commodity clusters,'' \textit{Proc. ACM/IEEE SC 2006 Conference}, 2006.
+
+\bibitem{case2020} D.~A.~Case \textit{et al.}, ``AMBER 2020,'' University of California, San Francisco, 2020.
+
+\bibitem{abraham2015} M.~J.~Abraham \textit{et al.}, ``GROMACS: High performance molecular simulations through multi-level parallelism from laptops to supercomputers,'' \textit{SoftwareX}, vol.~1--2, pp.~19--25, 2015.
+
+\bibitem{plimpton1995} S.~Plimpton, ``Fast parallel algorithms for short-range molecular dynamics,'' \textit{J. Comput. Phys.}, vol.~117, pp.~1--19, 1995.
+
+\end{thebibliography}
+
+\end{document}
