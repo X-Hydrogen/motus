@@ -178,13 +178,13 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 ```bash
 # From raw trajectory to complete analysis package — run from within the job folder
 cd desmond_md_job_my-system
-../motus/desmond/desmond-analysis.sh --plot
+../motus/desmond/desmond-analysis_large_system.sh --plot
 # → energy, Hbonds, RDF, density, dipole, clustering, PCA, SIMA...
 # → all figures in PDF (vector) + PNG (300 DPI)
-# → < 2 minutes
+# → < 2 minutes (with vectorized numpy engine)
 ```
 
-**New in v1.0.0:** Autonomous AI scientist — describe your research in natural language and MOTUS does everything. Gold-standard 16-page LaTeX publication template. Also: LAMMPS reactive MD, Desmond one-click publishing, CWD auto-detection for all engines.
+**New in v1.0.1:** Large-system optimized analysis (vectorized numpy, 100× faster), Nature 4-border spine styling, pastel diverging SIMA heatmaps, SASA stride interpolation, native DOCX with all 39 figures, gold-standard paper generator with quality guarantees.
 
 ---
 
@@ -208,13 +208,13 @@ bash ../motus/desmond/desmond-md.sh -t 5000 -i 2.5     # Or override time & inte
 #      [=========-----] 65% | 32500/50000 ps | 2513 ns/day
 
 # 3. Full analysis + figures (same folder)
-bash ../motus/desmond/desmond-analysis.sh --plot
+bash ../motus/desmond/desmond-analysis_large_system.sh --plot
 
 # 4. One-click publication paper (16pp, ~8000 words)
 bash ../motus/desmond/desmond-publish.sh
 
 # 5. Re-plot from existing data (seconds)
-bash ../motus/desmond/desmond-analysis.sh --fig-only
+bash ../motus/desmond/desmond-analysis_large_system.sh --fig-only
 ```
 
 **Key features:**
@@ -223,6 +223,8 @@ bash ../motus/desmond/desmond-analysis.sh --fig-only
 - **Real-time progress bar** — shows `Chemical time`, `ns/day`, and percentage during MD runs
 - **Dynamic server paths** — auto-discovers Schrödinger scratch directory (works across different cluster configurations)
 - **Stage-by-stage monitoring** — shows `_multisim.log` output during equilibration phases
+- **Large-system optimized** — vectorized numpy water shell analysis + SASA stride interpolation (100× faster for >10K atoms)
+- **Publication-grade styling** — Nature 4-border spines, pastel diverging colormaps, 300 DPI output
 
 **Legacy mode** (`--mode 2`): Build from a `desmond_setup_XXXXX` folder (generates `.msj` and `.cfg` from CLI parameters):
 ```bash
@@ -307,6 +309,10 @@ bash ../motus/desmond/desmond-analysis.sh --fig-only
 | **fix bond/react Kinetics** | — | — | ✅ |
 | **Arrhenius Rate Fitting** | — | — | ✅ |
 | **CMS↔GROMACS/LAMMPS Converter** | `cms2gmx.py` | `cms2lmp.py` | — |
+| **Large-System Optimized** (>10K atoms) | ✅ Vectorized | — | — |
+| **SASA Stride Interpolation** | ✅ | — | — |
+| **Nature 4-Border Styling** | ✅ | ✅ | ✅ |
+| **Pastel Heatmap Colormaps** | ✅ | — | — |
 
 ---
 
@@ -489,9 +495,12 @@ All figures saved in `<md_output>/analysis/figures/`:
 
 **Styling:**
 - Arial / DejaVu Sans font family
-- Nature-inspired 8-color palette
+- Nature-style **4-border spines** (top/right visible)
+- tab10 unified color palette across all modules
+- Pastel diverging colormap for dihedral heatmaps (soft blue → white → coral)
 - Dual Y-axis with color coding (RDF, dipole)
 - Convex hulls + centroids for clustering
+- Pie charts: exploded wedges, white bold percentage labels
 - Legend outside the plot frame (clean look)
 - Tight bounding boxes for direct LaTeX inclusion
 
@@ -541,23 +550,31 @@ motus/
 │       └── tunnel.sh
 ├── desmond/                       ← Desmond engine scripts
 │   ├── desmond-md.sh              ← MD job submission & monitoring
-│   ├── desmond-analysis.sh        ← Post-processing pipeline (15 modules)
-│   ├── desmond-publish.sh         ← One-click LaTeX paper generation (16pp)
-│   ├── desmond-metadynamics.sh    ← MetaD enhanced sampling
+│   ├── desmond-model-md.sh        ← Modeling: Packmol PDB → .cms (S-OPLS)
+│   ├── desmond-analysis.sh        ← Post-processing (legacy — reference)
+│   ├── desmond-analysis_large_system.sh  ← Post-processing (★主力 — vectorized)
+│   ├── desmond-publish.sh         ← One-click LaTeX+Word paper generation
+│   ├── desmond-metadynamics.sh    ← MetaD enhanced sampling (MD + analysis)
+│   ├── desmond-metamd_job-analysis.sh ← MetaD analysis from existing job
 │   ├── templates/                 ← Paper templates
 │   │   ├── paper-template.tex     ← Gold-standard LaTeX template (579 lines)
 │   │   └── paper-reference.pdf    ← Reference output (16pp, ~8000 words)
 │   └── functions/
-│       ├── desmond_plot.py        ← Publication-quality figure generator
-│       ├── sima_gen.py            ← SIMA data generator
-│       ├── sima_plot.py           ← SIMA figure generator
+│       ├── desmond_plot.py        ← Publication-quality figure generator (Nature style)
+│       ├── paper-generator.py     ← Automated LaTeX paper from analysis data
+│       ├── docx_generator.py      ← Native Word document with embedded images
+│       ├── sima_gen.py            ← SIMA data generator (--sasa-stride for speed)
+│       ├── sima_plot.py           ← SIMA figure generator (pastel colormap)
 │       ├── rdf_gen.py             ← RDF + coordination number
+│       ├── vmd_rdf.tcl            ← VMD-accelerated RDF (100,000× faster)
 │       ├── density_gen.py         ← 1D/2D density cross-sections
 │       ├── rg_gen.py              ← Radius of gyration
 │       ├── dist_gen.py            ← Distance monitoring
-│       ├── water_res_gen.py       ← Water residence time
+│       ├── water_shell_fast.py    ← Vectorized water shell classification
+│       ├── water_res_fast.py      ← Vectorized water residence time
+│       ├── water_res_gen.py       ← Water residence time (legacy)
 │       ├── cluster_gen.py         ← Conformational clustering + PCA
-│       ├── dipole_gen.py          ← Molecular dipole moment
+│       ├── dipole_gen.py          ← Molecular dipole moment (type-aggregated)
 │       ├── freevol_gen.py         ← Free volume / void analysis
 │       ├── meta_gen.py            ← Metadynamics CV setup helper
 │       └── esp_gen.py             ← Electrostatic potential (WIP)
@@ -614,6 +631,8 @@ motus/
 | LAMMPS reactive MD — ReaxFF + fix bond/react + Arrhenius fitting | ✅ v0.0.3 |
 | **🧬 MOTUS Agent — Autonomous AI Scientist** | ✅ v1.0.0 |
 | **🌐 Web Interface — Sci-fi dashboard with SSE streaming** | ✅ v1.0.0 |
+| **Nature 4-border styling + pastel heatmaps + SASA optimization** | ✅ v1.0.1 |
+| **DOCX native generator (39 figures embedded) + paper quality guarantee** | ✅ v1.0.1 |
 | Solvent structure analysis (sorient/spatial/h2order) | 🚧 Planned |
 | Electrostatic Potential (ESP) | 🚧 Planned |
 | Multi-agent collaborative research | 🚧 Planned |

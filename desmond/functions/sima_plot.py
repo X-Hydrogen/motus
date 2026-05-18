@@ -136,9 +136,10 @@ def plot_properties(analysis_dir, outdir):
         metrics = ['rmsd', 'rgyr', 'intrahb', 'molsa', 'sasa', 'psa'][:n_props]
 
         FIG_WIDTH = 12
-        FIG_ROW_HEIGHT = 1.8
+        FIG_ROW_HEIGHT = 2.2     # more vertical space per row
         fig = plt.figure(figsize=(FIG_WIDTH, FIG_ROW_HEIGHT * n_props))
-        gs = gridspec.GridSpec(n_props, 2, width_ratios=[5, 1], wspace=0.08)
+        gs = gridspec.GridSpec(n_props, 2, width_ratios=[5, 1],
+                               wspace=0.08, hspace=0.45)
 
         for i, m in enumerate(metrics):
             ax = plt.subplot(gs[i, 0])
@@ -193,7 +194,7 @@ def plot_properties(analysis_dir, outdir):
                 spine.set_linewidth(0.8)
 
         fig.suptitle(f'{system_name} – Ligand Properties', fontsize=13, y=0.995)
-        plt.subplots_adjust(left=0.1, right=0.95, top=0.96, bottom=0.05)
+        plt.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.06)
         save_figure(fig, outdir, f'sima_properties_{basename}', dpi=400)
         plt.close(fig)
 
@@ -227,9 +228,22 @@ def plot_torsions(analysis_dir, outdir):
         plt.rcParams.update({'font.size': 24})
         fig, ax = plt.subplots(figsize=(12, 8))
         torsion_data = data[:, 1:].T
-        im = ax.imshow(torsion_data, aspect='auto', cmap='viridis',
+        # Pastel diverging colormap for dihedral angles:
+        # soft teal (-180°) → off-white (0°) → soft coral (+180°)
+        # Much easier on the eyes than cyclic/vibrant colormaps.
+        from matplotlib.colors import LinearSegmentedColormap
+        pastel_cmap = LinearSegmentedColormap.from_list('pastel_torsion', [
+            '#5b9bd5',  # soft blue at -180
+            '#b8d8f0',  # light blue
+            '#f7f4f0',  # off-white at 0
+            '#f0c8b0',  # light coral
+            '#d96c4a',  # soft red at +180
+        ], N=256)
+        im = ax.imshow(torsion_data, aspect='auto', cmap=pastel_cmap,
+                       vmin=-180, vmax=180,
                        extent=[time_ns[0], time_ns[-1], 1, n_torsions])
-        cbar = plt.colorbar(im, ax=ax, label='Torsion Angle (°)')
+        cbar = plt.colorbar(im, ax=ax, label='Torsion Angle (°)',
+                            ticks=[-180, -120, -60, 0, 60, 120, 180])
         ax.set_xlabel(tlabel)
         ax.set_ylabel('Torsion Index')
         ax.set_yticks(np.arange(1, n_torsions + 1, 1))
@@ -288,7 +302,7 @@ def plot_torsions(analysis_dir, outdir):
 
             fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(6, 6))
             scatter = ax.scatter(angles_rad, r, c=r, cmap='viridis',
-                                 s=10, alpha=0.7, marker='x')
+                                 s=12, alpha=0.6, marker='x')
             cbar = plt.colorbar(scatter, ax=ax, label='Time (ns)', shrink=0.8, pad=0.1)
 
             ax.set_ylim(0, r.max())

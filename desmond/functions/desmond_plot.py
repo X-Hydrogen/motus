@@ -40,8 +40,8 @@ plt.rcParams.update({
     'savefig.bbox': 'tight',
     'savefig.pad_inches': 0.05,
     'axes.linewidth': 1.0,
-    'axes.spines.top': False,
-    'axes.spines.right': False,
+    'axes.spines.top': True,
+    'axes.spines.right': True,
     'xtick.major.width': 0.8,
     'ytick.major.width': 0.8,
     'xtick.major.size': 4,
@@ -268,37 +268,58 @@ def plot_water_shells(csv_path, outdir):
     t = data[time_col]
     t, tlabel = convert_time_to_ns(t)
 
-    # Dual panel: stacked area over time + average pie
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4),
-                                    gridspec_kw={'width_ratios': [2, 1]})
+    # Dual panel: stacked area over time + average pie (Nature journal style)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.2),
+                                    gridspec_kw={'width_ratios': [1.8, 1]})
 
-    shell_colors = {'Bound_1st': PALETTE['red'], 'Second': PALETTE['orange'],
-                    'Free': PALETTE['blue']}
-    shell_labels = {'Bound_1st': 'Bound (<3.5 Å)', 'Second': '2nd shell (3.5–5 Å)',
-                    'Free': 'Free (>5 Å)'}
+    # Nature-inspired water shell colors (ordered: bound→2nd→free = warm→cool)
+    shell_colors = {
+        'Bound_1st': '#CB181D',    # Deep red — tightly bound
+        'Second':    '#FD8D3C',    # Orange — intermediate
+        'Free':      '#2171B5',    # Deep blue — bulk/free
+    }
+    shell_labels = {
+        'Bound_1st': 'Bound (<3.5 Å)',
+        'Second':    '2nd shell (3.5–5 Å)',
+        'Free':      'Free (>5 Å)',
+    }
 
-    # Stacked area
+    # Stacked area with Nature-style aesthetics
     y_stack = np.zeros(len(t))
     for sk in shell_keys:
         vals = data[sk]
         color = shell_colors.get(sk, COLORS[shell_keys.index(sk) % len(COLORS)])
         label = shell_labels.get(sk, sk)
-        ax1.fill_between(t, y_stack, y_stack + vals, color=color, alpha=0.55,
-                         linewidth=0.3, label=label)
+        ax1.fill_between(t, y_stack, y_stack + vals, color=color, alpha=0.60,
+                         linewidth=0.3, edgecolor='white', label=label)
         y_stack = y_stack + vals
 
-    ax1.set_ylabel('Water Molecules')
-    ax1.set_xlabel(tlabel)
-    ax1.legend(fontsize=8, loc='upper right')
-    ax1.set_title('Water Shell Populations')
+    # Draw total water count as a thin line on top
+    ax1.plot(t, y_stack, color='#333333', linewidth=0.8, alpha=0.5, linestyle='--')
 
-    # Average pie chart
+    ax1.set_ylabel('Water Molecules', fontsize=10)
+    ax1.set_xlabel(tlabel, fontsize=10)
+    ax1.legend(fontsize=8, loc='upper right', framealpha=0.8, edgecolor='#cccccc')
+    ax1.set_title('Water Shell Populations', fontsize=11, fontweight='bold')
+    ax1.tick_params(labelsize=8)
+
+    # Exploded pie chart (Nature style — matching cluster pie)
     avg_vals = [np.mean(data[sk]) for sk in shell_keys]
     pie_labels = [shell_labels.get(sk, sk) for sk in shell_keys]
     pie_colors = [shell_colors.get(sk, COLORS[i % len(COLORS)]) for i, sk in enumerate(shell_keys)]
-    wedges, texts, autotexts = ax2.pie(avg_vals, labels=pie_labels, colors=pie_colors,
-            autopct='%1.1f%%', textprops={'fontsize': 8})
-    ax2.set_title('Average Distribution', fontsize=10)
+    explode = (0.02, 0.02, 0.08)  # slight pop on all, more on Free
+
+    wedges, texts, autotexts = ax2.pie(
+        avg_vals, labels=pie_labels, colors=pie_colors,
+        autopct='%1.1f%%', explode=explode,
+        startangle=90, pctdistance=0.70,
+        textprops={'fontsize': 8},
+        wedgeprops={'edgecolor': 'white', 'linewidth': 0.8}
+    )
+    for at in autotexts:
+        at.set_fontweight('bold')
+        at.set_fontsize(9)
+    ax2.set_title('Average Distribution', fontsize=10, fontweight='bold')
 
     plt.tight_layout()
     save_figure(fig, outdir, 'water_shells')
@@ -384,75 +405,171 @@ def plot_rmsf(csv_path, outdir):
 
 
 def plot_summary_dashboard(analysis_dir, outdir):
-    """Create a summary dashboard combining key metrics."""
-    fig = plt.figure(figsize=(10, 8))
-    fig.suptitle('MD Simulation Summary Dashboard', fontsize=14, fontweight='bold', y=0.98)
-
-    plots = []
+    """Create a comprehensive summary dashboard (3×3 grid)."""
     csv_files = {p.name: p for p in Path(analysis_dir).glob('*.csv')}
 
-    # Grid layout: 2x2
-    grid = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    n_rows, n_cols = 3, 3
+    fig = plt.figure(figsize=(14, 12))
+    fig.suptitle('MD Simulation Summary Dashboard', fontsize=15, fontweight='bold', y=0.98)
 
-    idx = 0
+    # Title font for each subplot
+    TITLE_SIZE = 9
+    LABEL_SIZE = 7
+    TICK_SIZE = 6
 
-    # Energy time series
+    panel = 0
+
+    def next_ax():
+        nonlocal panel
+        if panel >= n_rows * n_cols:
+            return None
+        ax = plt.subplot2grid((n_rows, n_cols), (panel // n_cols, panel % n_cols))
+        panel += 1
+        return ax
+
+    # ── 1. Energy Time Series ──
     if 'energy_timeseries.csv' in csv_files:
         data = read_csv(str(csv_files['energy_timeseries.csv']))
         if data:
+            ax = next_ax()
             t, tlabel = convert_time_to_ns(data['Time_ps'])
-            ax = plt.subplot2grid((2, 2), grid[idx])
-            ax.plot(t, data['Temp_K'], color=PALETTE['red'], linewidth=0.5, alpha=0.8)
-            ax.set_ylabel('Temperature (K)')
-            ax.set_xlabel(tlabel)
-            idx += 1
+            ax.plot(t, data['Temp_K'], color=PALETTE['red'], linewidth=0.5, alpha=0.8, label='T')
+            ax.set_ylabel('T (K)', fontsize=LABEL_SIZE)
+            ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+            ax.set_title('1. Temperature', fontsize=TITLE_SIZE, fontweight='bold')
+            ax.tick_params(labelsize=TICK_SIZE)
 
-    # Energy distribution
-    if 'energy_timeseries.csv' in csv_files and idx < 4:
-        ax = plt.subplot2grid((2, 2), grid[idx])
-        temps = data['Temp_K']
-        ax.hist(temps, bins=30, color=PALETTE['red'], alpha=0.6, edgecolor='white', linewidth=0.2)
-        ax.axvline(np.mean(temps), color='black', linestyle='--', linewidth=1)
-        ax.set_xlabel(f'T (K), μ={np.mean(temps):.0f}, σ={np.std(temps):.0f}')
-        ax.set_ylabel('Count')
-        idx += 1
+    # ── 2. Potential Energy ──
+    if 'energy_timeseries.csv' in csv_files:
+        ax = next_ax()
+        ax.plot(t, data['Pot_E_kcal'], color=PALETTE['green'], linewidth=0.5, alpha=0.8)
+        ax.set_ylabel('Epot (kcal/mol)', fontsize=LABEL_SIZE)
+        ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+        ax.set_title('2. Potential Energy', fontsize=TITLE_SIZE, fontweight='bold')
+        ax.tick_params(labelsize=TICK_SIZE)
 
-    # H-bonds
+    # ── 3. Volume ──
+    if 'energy_timeseries.csv' in csv_files:
+        ax = next_ax()
+        ax.plot(t, data['Vol_A3'], color=PALETTE['purple'], linewidth=0.5, alpha=0.8)
+        ax.set_ylabel('Vol (Å³)', fontsize=LABEL_SIZE)
+        ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+        ax.set_title('3. Volume', fontsize=TITLE_SIZE, fontweight='bold')
+        ax.tick_params(labelsize=TICK_SIZE)
+
+    # ── 4. Hydrogen Bonds ──
     for key in ['hbonds_all.csv', 'hbonds_solute.csv']:
-        if key in csv_files and idx < 4:
+        if key in csv_files:
             hb_data = read_csv(str(csv_files[key]))
             if hb_data:
-                ax = plt.subplot2grid((2, 2), grid[idx])
+                ax = next_ax()
                 cols = list(hb_data.keys())
-                t = hb_data[cols[0]]
+                t_hb = hb_data[cols[0]]
                 counts = hb_data[cols[1]] if len(cols) > 1 else hb_data[cols[0]]
-                t, tlabel = convert_time_to_ns(t)
-                ax.plot(t, counts, color=PALETTE['teal'], linewidth=0.5, alpha=0.8)
-                ax.set_ylabel('H-bonds')
-                ax.set_xlabel(tlabel)
-                ax.set_title(key.replace('hbonds_', '').replace('.csv', ''), fontsize=9)
-                idx += 1
+                t_hb, _ = convert_time_to_ns(t_hb)
+                ax.plot(t_hb, counts, color=PALETTE['teal'], linewidth=0.5, alpha=0.8)
+                label = key.replace('hbonds_', '').replace('.csv', '')
+                ax.set_ylabel(f'{label} H-bonds', fontsize=LABEL_SIZE)
+                ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+                ax.set_title(f'4. H-Bonds ({label})', fontsize=TITLE_SIZE, fontweight='bold')
+                ax.tick_params(labelsize=TICK_SIZE)
                 break
 
-    # Solute-water shells
-    sw_key = 'solute_water_shells.csv' if 'solute_water_shells.csv' in csv_files else 'solute_water_contacts.csv'
-    if sw_key in csv_files and idx < 4:
+    # ── 5. Water Shells ──
+    sw_key = 'solute_water_shells.csv'
+    if sw_key in csv_files:
         sw_data = read_csv(str(csv_files[sw_key]))
         if sw_data:
-            ax = plt.subplot2grid((2, 2), grid[idx])
-            time_col = [k for k in sw_data if 'time' in k.lower()][0] if any('time' in k.lower() for k in sw_data) else list(sw_data.keys())[1]
-            # Try bound column first, else fall back to last column
-            bound_cols = [k for k in sw_data if k.lower() in ('bound_1st',)]
-            val_col = bound_cols[0] if bound_cols else list(sw_data.keys())[-1]
-            t = sw_data[time_col]
-            t, tlabel = convert_time_to_ns(t)
-            ax.plot(t, sw_data[val_col], color=PALETTE['red'], linewidth=0.5, alpha=0.8, label=val_col)
-            ax.set_ylabel('Bound Water')
-            ax.set_xlabel(tlabel)
-            ax.set_title('Water Shells (Bound <3.5Å)', fontsize=9)
-            idx += 1
+            ax = next_ax()
+            time_col = [k for k in sw_data if 'time' in k.lower()][0]
+            t_sw = sw_data[time_col]
+            t_sw, _ = convert_time_to_ns(t_sw)
+            shell_keys = [k for k in sw_data if k.lower() in ('bound_1st', 'second', 'free')]
+            colors_shell = {'Bound_1st': '#CB181D', 'Second': '#FD8D3C', 'Free': '#2171B5'}
+            for sk in shell_keys:
+                ax.plot(t_sw, sw_data[sk], color=colors_shell.get(sk, 'grey'),
+                        linewidth=0.6, alpha=0.7, label=sk)
+            ax.set_ylabel('Water count', fontsize=LABEL_SIZE)
+            ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+            ax.set_title('5. Water Shell Populations', fontsize=TITLE_SIZE, fontweight='bold')
+            ax.legend(fontsize=TICK_SIZE, ncol=3, loc='upper right')
+            ax.tick_params(labelsize=TICK_SIZE)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    # ── 6. Radius of Gyration ──
+    rg_files = sorted([p for p in Path(analysis_dir).glob('rg_*.csv') if 'Na1' not in p.name])
+    if rg_files:
+        ax = next_ax()
+        for rgf in rg_files[:3]:
+            rg_data = read_csv(str(rgf))
+            if rg_data:
+                cols = list(rg_data.keys())
+                t_rg = rg_data[cols[0]]
+                t_rg, _ = convert_time_to_ns(t_rg)
+                val = rg_data[cols[1]]
+                label = rgf.stem.replace('rg_', '')[:20]
+                ax.plot(t_rg, val, linewidth=0.7, alpha=0.8, label=label)
+        ax.set_ylabel('Rg (Å)', fontsize=LABEL_SIZE)
+        ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+        ax.set_title('6. Radius of Gyration', fontsize=TITLE_SIZE, fontweight='bold')
+        ax.legend(fontsize=TICK_SIZE, loc='best')
+        ax.tick_params(labelsize=TICK_SIZE)
+
+    # ── 7. Total Dipole Moment ──
+    if 'dipole_total.csv' in csv_files:
+        dip_data = read_csv(str(csv_files['dipole_total.csv']))
+        if dip_data:
+            ax = next_ax()
+            t_dip = dip_data['Time_ps']
+            t_dip, _ = convert_time_to_ns(t_dip)
+            mag = dip_data['Mu_Mag_D']
+            ax.plot(t_dip, mag, color=PALETTE['orange'], linewidth=0.6, alpha=0.8)
+            ax.axhline(np.mean(mag), color='black', linestyle='--', linewidth=0.5)
+            ax.set_ylabel('Total Dipole (D)', fontsize=LABEL_SIZE)
+            ax.set_xlabel(tlabel, fontsize=LABEL_SIZE)
+            ax.set_title(f'7. Total Dipole (μ={np.mean(mag):.0f} D)', fontsize=TITLE_SIZE, fontweight='bold')
+            ax.tick_params(labelsize=TICK_SIZE)
+
+    # ── 8. Cluster Populations (pie) ──
+    if 'cluster_summary.csv' in csv_files:
+        ax = next_ax()
+        with open(csv_files['cluster_summary.csv']) as f:
+            reader = csv.DictReader(f)
+            sizes, labels = [], []
+            cmap_c = plt.cm.tab10
+            for i, row in enumerate(reader):
+                sizes.append(int(row['Size']))
+                labels.append(f"C{row['Cluster']}")
+        colors_c = [cmap_c(i % 10) for i in range(len(sizes))]
+        ax.pie(sizes, labels=labels, autopct='%1.0f%%', colors=colors_c,
+               startangle=90, textprops={'fontsize': TICK_SIZE},
+               wedgeprops={'edgecolor': 'white', 'linewidth': 0.5})
+        ax.set_title('8. Cluster Distribution', fontsize=TITLE_SIZE, fontweight='bold')
+
+    # ── 9. Density 1D (solute) ──
+    dens_files = sorted(Path(analysis_dir).glob('density_1d_solute_*.csv'))
+    if dens_files:
+        ax = next_ax()
+        colors_xyz = {'X': PALETTE['red'], 'Y': PALETTE['green'], 'Z': PALETTE['blue']}
+        for df in dens_files:
+            axis_label = df.stem.split('_')[-1]
+            d_data = read_csv(str(df))
+            if d_data and 'r_A' in d_data:
+                ax.plot(d_data['r_A'], d_data['density'],
+                        color=colors_xyz.get(axis_label, 'grey'),
+                        linewidth=0.7, alpha=0.7, label=axis_label)
+        ax.set_xlabel('Position (Å)', fontsize=LABEL_SIZE)
+        ax.set_ylabel('Rel. Density', fontsize=LABEL_SIZE)
+        ax.set_title('9. Solute Density (1D)', fontsize=TITLE_SIZE, fontweight='bold')
+        ax.legend(fontsize=TICK_SIZE, loc='upper right')
+        ax.tick_params(labelsize=TICK_SIZE)
+
+    # Hide unused panels
+    while panel < n_rows * n_cols:
+        ax = plt.subplot2grid((n_rows, n_cols), (panel // n_cols, panel % n_cols))
+        ax.axis('off')
+        panel += 1
+
+    plt.tight_layout(rect=[0, 0.01, 1, 0.95])
     save_figure(fig, outdir, 'summary_dashboard')
     plt.close(fig)
 
@@ -1084,16 +1201,35 @@ def plot_cluster(analysis_dir, outdir):
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
-        colors = [PALETTE[c] for c in ['blue', 'red', 'green', 'orange', 'purple', 'teal', 'pink', 'grey']]
-        ax1.bar(clusters, sizes, color=colors[:len(clusters)])
+        # Use tab10 colors (same as PCA scatter) for consistency
+        cmap = plt.cm.tab10
+        cluster_colors = [cmap(i % 10) for i in range(len(clusters))]
+
+        # Bar chart — thinner bars with ~1/2 bar-width gaps between them
+        ax1.bar(clusters, sizes, width=0.55, color=cluster_colors, edgecolor='white', linewidth=0.5)
         ax1.set_xlabel('Cluster', fontsize=9)
         ax1.set_ylabel('Population (frames)', fontsize=9)
         ax1.set_title('Cluster Populations', fontsize=11)
         ax1.tick_params(labelsize=8)
 
-        ax2.pie(fractions, labels=[f'C{c}' for c in clusters],
-                autopct='%1.1f%%', colors=colors[:len(clusters)],
-                textprops={'fontsize': 8})
+        # Exploded pie chart (Nature journal style)
+        explode = [0.05] * len(clusters)  # slight separation for all wedges
+        wedges, texts, autotexts = ax2.pie(
+            fractions,
+            labels=[f'C{c}' for c in clusters],
+            autopct='%1.1f%%',
+            colors=cluster_colors,
+            explode=explode,
+            shadow=False,
+            startangle=90,
+            pctdistance=0.75,
+            textprops={'fontsize': 8}
+        )
+        # Style the percentage text — white, bold, larger for readability
+        for at in autotexts:
+            at.set_fontweight('bold')
+            at.set_fontsize(10)
+            at.set_color('white')
         ax2.set_title('Cluster Distribution', fontsize=11)
 
         plt.tight_layout()
@@ -1112,11 +1248,12 @@ def plot_cluster(analysis_dir, outdir):
                 # Stack cluster membership as colored bands
                 n_clusters = len(cluster_cols)
                 y = np.zeros(len(t))
-                colors = [PALETTE[c] for c in ['blue', 'red', 'green', 'orange', 'purple', 'teal', 'pink', 'grey']]
+                cmap = plt.cm.tab10
+                cluster_colors = [cmap(i % 10) for i in range(n_clusters)]
                 for ci, col in enumerate(cluster_cols):
                     mask = data[col] > 0.5
                     ax.fill_between(t, 0, 1, where=mask,
-                                    color=colors[ci % len(colors)], alpha=0.6,
+                                    color=cluster_colors[ci], alpha=0.6,
                                     label=f'C{ci+1}', step='post')
                 ax.set_xlabel('Time (ps)', fontsize=9)
                 ax.set_ylabel('Cluster', fontsize=9)
