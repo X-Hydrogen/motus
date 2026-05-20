@@ -76,13 +76,17 @@ Get your key at: https://platform.deepseek.com/api_keys
 
 #### Requirements
 
-| Requirement | Version | Required? |
-|------------|---------|-----------|
-| Python | ≥ 3.10 | ✅ Required |
+**Engine scripts** — run `bash setup.sh` first:
+
+| Requirement | Version | Purpose |
+|------------|---------|---------|
+| Python | ≥ 3.10 | ✅ Required (all scripts) |
+| numpy, matplotlib, scipy | latest | ✅ Required (analysis + plotting) |
+| pandas, pyyaml, pillow, python-docx | latest | Required (data + docs) |
 | GROMACS | any | Optional (engine scripts) |
 | LAMMPS | any | Optional (engine scripts) |
 | Schrödinger Suite | any | Optional (Desmond engine) |
-| VMD | any | Optional (system rendering) |
+| VMD | any | Optional (RDF acceleration) |
 
 ### Quick Start
 
@@ -178,10 +182,11 @@ One command. Three engines. Fifteen analysis types. Zero manual plotting.
 ```bash
 # From raw trajectory to complete analysis package — run from within the job folder
 cd desmond_md_job_my-system
-../motus/desmond/desmond-analysis_large_system.sh --plot
+../motus/desmond/desmond-analysis_large_system.sh
 # → energy, Hbonds, RDF, density, dipole, clustering, PCA, SIMA...
 # → all figures in PDF (vector) + PNG (300 DPI)
 # → < 2 minutes (with vectorized numpy engine)
+# → figures always generated — no extra flags needed
 ```
 
 **New in v1.0.1:** Large-system optimized analysis (vectorized numpy, 100× faster), Nature 4-border spine styling, pastel diverging SIMA heatmaps, SASA stride interpolation, native DOCX with all 39 figures, gold-standard paper generator with quality guarantees.
@@ -189,6 +194,17 @@ cd desmond_md_job_my-system
 ---
 
 ## Quick Start — Engine Scripts
+
+### First-Time Setup
+
+```bash
+cd motus
+bash setup.sh         # Install Python deps (numpy, matplotlib, scipy, pandas, ...)
+                      # Auto-detects conda → pip, configures Tsinghua mirrors
+```
+
+This creates `requirements.txt` + `.motus_python_path` — the scripts use this to find the correct Python interpreter automatically.
+
 
 ### Desmond
 
@@ -208,7 +224,7 @@ bash ../motus/desmond/desmond-md.sh -t 5000 -i 2.5     # Or override time & inte
 #      [=========-----] 65% | 32500/50000 ps | 2513 ns/day
 
 # 3. Full analysis + figures (same folder)
-bash ../motus/desmond/desmond-analysis_large_system.sh --plot
+bash ../motus/desmond/desmond-analysis_large_system.sh
 
 # 4. One-click publication paper (16pp, ~8000 words)
 bash ../motus/desmond/desmond-publish.sh
@@ -513,6 +529,9 @@ motus/
 ├── README.md                      ← You are here
 ├── LICENSE                        ← MIT
 ├── install.sh                     ← One-command server setup
+├── setup.sh                       ← Script dependency installer (pip + conda)
+├── requirements.txt                ← Python package list
+├── .motus_python_path              ← Auto-detected Python interpreter
 ├── .gitignore
 ├── docs/images/                   ← Documentation screenshots
 │   ├── MOTUS-top.png              ← Banner
