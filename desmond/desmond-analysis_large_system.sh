@@ -9,6 +9,7 @@
 # Options:
 #   --plot              Full analysis + generate publication figures (PDF+PNG)
 #   --fig-only          Skip analysis, ONLY re-plot from existing CSV data
+#   --free-volume       Enable free volume / void analysis (SLOW, ~hours for large systems, off by default)
 #   --plot-type <type>  Plot type: energy|hbonds|water_shells|rdf|density|rg|distance|water_res|dipole|freevol|cluster|dashboard|all
 #
 # The folder must contain:
@@ -125,7 +126,7 @@ usage() {
 }
 
 # ── Parse args ──
-MD_FOLDER=""; ASL1=""; ASL2=""; DO_PLOT=1; FIG_ONLY=0; PLOT_TYPE="all"
+MD_FOLDER=""; ASL1=""; ASL2=""; DO_PLOT=1; FIG_ONLY=0; PLOT_TYPE="all"; DO_FREEVOL=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage ;;
@@ -135,6 +136,7 @@ while [[ $# -gt 0 ]]; do
         --plot)   DO_PLOT=1; shift ;;
         --fig-only) FIG_ONLY=1; DO_PLOT=1; shift ;; 
         --plot-type) PLOT_TYPE="$2"; shift 2 ;;
+        --free-volume) DO_FREEVOL=1; shift ;;
         *) MD_FOLDER="$1"; shift ;;
     esac
 done
@@ -596,6 +598,12 @@ if [[ -f "$EAF_IN" ]]; then
     if [[ -f "$EAF_FILE" ]]; then
         log "SIMA results: $(du -h "$EAF_FILE" | cut -f1)"
         
+        # Ensure .eaf extension for downstream report generation
+        EAF_REPORT_FILE="${EAF_PREFIX}.eaf"
+        if [[ "$EAF_FILE" != "$EAF_REPORT_FILE" ]]; then
+            cp "$EAF_FILE" "$EAF_REPORT_FILE"
+        fi
+        
         # Extract data
         DATA_DIR="$ANADIR/data"
         mkdir -p "$DATA_DIR"
@@ -920,30 +928,34 @@ report_sep
 header "14. Free Volume Analysis"
 cd "$ANADIR"
 
-FREEVOL_SCRIPT="$SCRIPT_DIR/functions/freevol_gen.py"
-if [[ -f "$FREEVOL_SCRIPT" ]]; then
-    log "Computing free volume / void space..."
-    FREEVOL_OUT=$($RUN_SCHROD python3 "$FREEVOL_SCRIPT" \
-        "$CMS" "$TRJ" "$ANADIR" \
-        --stride 50 --max-frames 40 --probe 1.4 --grid 1.0 2>&1)
-    if [[ $? -eq 0 ]]; then
-        echo "$FREEVOL_OUT" | grep -E '✓|Free volume|FFV' | while IFS= read -r line; do
-            log "  $line"
-        done
-        if [[ -f "$ANADIR/free_volume.csv" ]]; then
-            log "  → Generating free volume figure..."
-            python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type freevol 2>&1 | \
-                grep '✓\|──' | while IFS= read -r line; do
-                log "    $line"
+if [[ $DO_FREEVOL -eq 1 ]]; then
+    FREEVOL_SCRIPT="$SCRIPT_DIR/functions/freevol_gen.py"
+    if [[ -f "$FREEVOL_SCRIPT" ]]; then
+        log "Computing free volume / void space..."
+        FREEVOL_OUT=$($RUN_SCHROD python3 "$FREEVOL_SCRIPT" \
+            "$CMS" "$TRJ" "$ANADIR" \
+            --stride 50 --max-frames 40 --probe 1.4 --grid 1.0 2>&1)
+        if [[ $? -eq 0 ]]; then
+            echo "$FREEVOL_OUT" | grep -E '✓|Free volume|FFV' | while IFS= read -r line; do
+                log "  $line"
             done
+            if [[ -f "$ANADIR/free_volume.csv" ]]; then
+                log "  → Generating free volume figure..."
+                python3 "$SCRIPT_DIR/functions/desmond_plot.py" "$ANADIR" --type freevol 2>&1 | \
+                    grep '✓\|──' | while IFS= read -r line; do
+                    log "    $line"
+                done
+            fi
+            report "── Free Volume ──"
+            report "  See free_volume.csv"
+        else
+            warn "Free volume computation failed (non-critical)"
         fi
-        report "── Free Volume ──"
-        report "  See free_volume.csv"
     else
-        warn "Free volume computation failed (non-critical)"
+        skip "Free volume (freevol_gen.py not found)"
     fi
 else
-    skip "Free volume (freevol_gen.py not found)"
+    skip "Free volume (use --free-volume to enable)"
 fi
 report_sep || true
 
@@ -982,6 +994,30 @@ else
     log "Generated: $NPDF PDFs + $NPNG PNGs"
 fi
 report_sep
+
+# ============================================================
+# ANALYSIS 16: Schrödinger SIMA Report PDF
+# ============================================================
+SIMA_REPORT_PDF="$ANADIR/data/${MD_NAME}_sima.pdf"
+if [[ -f "$EAF_REPORT_FILE" ]]; then
+    header "16. SIMA Report (Schrödinger Official)"
+    cd "$ANADIR"
+    log "Generating Schrödinger Simulation Interactions Diagram report..."
+    unset DISPLAY 2>/dev/null || true
+    if $RUN_SCHROD python3 "$SCHRODINGER/mmshare-v7.0/python/scripts/event_analysis.py" report \
+        "$EAF_REPORT_FILE" -pdf "$SIMA_REPORT_PDF" 2>/dev/null; then
+        if [[ -f "$SIMA_REPORT_PDF" ]]; then
+            log "  ✓ $(basename "$SIMA_REPORT_PDF") ($(du -h "$SIMA_REPORT_PDF" | cut -f1))"
+            report "── SIMA Report (Schrödinger) ──"
+            report "  See data/${MD_NAME}_sima.pdf"
+        fi
+    else
+        warn "SIMA report PDF generation failed (non-critical)"
+    fi
+    report_sep || true
+else
+    skip "SIMA report (no .eaf file found)"
+fi
 
 # ============================================================
 # FINAL: Generate Report
