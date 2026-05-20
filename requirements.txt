@@ -1,0 +1,13 @@
+# MOTUS — Python dependencies (core stack)
+# Install: pip3 install -r requirements.txt
+#
+# NOTE: Schrödinger-internal packages (schrodinger.application.desmond.*)
+# are NOT listed here — they require a licensed Schrödinger installation.
+
+numpy>=1.26
+matplotlib>=3.7
+scipy>=1.11
+pandas>=2.0
+pyyaml>=6.0
+pillow>=10.0
+python-docx>=0.8

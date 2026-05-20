@@ -18,7 +18,7 @@
 # and generates a summary report.
 # ============================================================
 
-set -euo pipefail
+set -eu
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -56,6 +56,62 @@ if ! find_schrodinger; then
 fi
 TIMEOUT=600
 
+# ── Find a working python3 (must have numpy + matplotlib + scipy) ──
+# Priority: MOTUS_PYTHON env var → .motus_python_path → conda → system
+find_python3() {
+    local candidates=()
+
+    # 1. MOTUS_PYTHON environment variable
+    if [[ -n "${MOTUS_PYTHON:-}" ]] && [[ -x "$MOTUS_PYTHON" ]]; then
+        candidates+=("$MOTUS_PYTHON")
+    fi
+
+    # 2. Saved path from setup.sh
+    local motus_py_path="$SCRIPT_DIR/.motus_python_path"
+    if [[ -f "$motus_py_path" ]]; then
+        local saved_py
+        saved_py=$(cat "$motus_py_path" 2>/dev/null)
+        if [[ -n "$saved_py" ]] && [[ -x "$saved_py" ]]; then
+            candidates+=("$saved_py")
+        fi
+    fi
+
+    # 3. Conda
+    candidates+=(
+        /home/xenon/miniconda3/bin/python3
+        /opt/miniconda3/bin/python3
+        "$HOME/miniconda3/bin/python3"
+    )
+
+    # 4. Generic conda (search PATH)
+    if command -v conda &>/dev/null; then
+        local conda_py
+        conda_py=$(command -v python3 2>/dev/null || true)
+        if [[ -n "$conda_py" ]] && [[ -x "$conda_py" ]]; then
+            candidates+=("$conda_py")
+        fi
+    fi
+
+    # 5. System fallback
+    candidates+=(
+        /usr/bin/python3
+        /bin/python3
+    )
+
+    for py in "${candidates[@]}"; do
+        if [[ -x "$py" ]] && "$py" -c "import numpy, matplotlib, scipy" 2>/dev/null; then
+            echo "$py"
+            return 0
+        fi
+    done
+    return 1
+}
+PYTHON3=$(find_python3)
+if [[ -z "$PYTHON3" ]]; then
+    echo -e "\033[0;31m[✗]\033[0m No python3 with numpy+matplotlib+scipy found. Install: pip install scipy"
+    exit 1
+fi
+
 log()    { echo -e "${GREEN}[✓]${NC} $*"; }
 warn()   { echo -e "${YELLOW}[!]${NC} $*"; }
 error()  { echo -e "${RED}[✗]${NC} $*"; }
@@ -69,7 +125,7 @@ usage() {
 }
 
 # ── Parse args ──
-MD_FOLDER=""; ASL1=""; ASL2=""; DO_PLOT=0; FIG_ONLY=0; PLOT_TYPE="all"
+MD_FOLDER=""; ASL1=""; ASL2=""; DO_PLOT=1; FIG_ONLY=0; PLOT_TYPE="all"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -h|--help) usage ;;
@@ -166,6 +222,9 @@ TRJ=$(ls -d "$MD_DIR"/*_trj 2>/dev/null | head -1)
 ENE=$(ls "$MD_DIR"/*.ene 2>/dev/null | head -1)
 LOG=$(ls "$MD_DIR"/*.log 2>/dev/null | grep -v multisim | head -1)
 CFG=$(ls "$MD_DIR"/*.cfg 2>/dev/null | grep -v cpt | grep -v out | head -1)
+MSJ=$(ls "$MD_DIR"/*.msj 2>/dev/null | head -1)
+JOBNAME=$(basename "$MD_DIR")
+[[ -z "$CFG" ]] && CFG=$(ls "$MD_DIR"/*.cfg 2>/dev/null | grep -v out | head -1)
 
 [[ -z "$CMS" ]] && error "No -out.cms found in $MD_DIR" && exit 1
 [[ -z "$TRJ" ]] && error "No _trj/ found in $MD_DIR" && exit 1
@@ -481,38 +540,86 @@ else
     skip "Protein interaction analysis (no protein)"
 fi
 
-# 6d: Simulation Interactions Diagram generation (auto-detect ligand)
-SIMA_GEN_SCRIPT="$SCRIPT_DIR/functions/sima_gen.py"
-if [[ -f "$SIMA_GEN_SCRIPT" ]]; then
-    log "Running Simulation Interactions Diagram generation..."
-    # For non-protein: auto-detect largest molecule as ligand
-    # For protein systems: skip ligand auto-detect (use --mol to specify)
-    SIMA_GEN_OUT=$($RUN_SCHROD python3 "$SIMA_GEN_SCRIPT" \
-        "$CMS" "$TRJ" "$ANADIR" \
-        ${HAS_PROTEIN:+--mol 2} \
-        --stride 5 --max-frames 1000 2>&1)
-    if [[ $? -eq 0 ]]; then
-        echo "$SIMA_GEN_OUT" | while IFS= read -r line; do
-            log "  $line"
-        done
-        # Auto-run plotting on generated .dat files
-        if [[ -f "$ANADIR/L_Torsions.dat" ]]; then
-            log "  → Generating SIMA figures..."
-            SIMA_PLOT_SCRIPT="$SCRIPT_DIR/functions/sima_plot.py"
-            if [[ -f "$SIMA_PLOT_SCRIPT" ]]; then
-                python3 "$SIMA_PLOT_SCRIPT" "$ANADIR" --type all 2>&1 | \
-                    grep '✓' | while IFS= read -r line; do
-                    log "    $line"
-                done
-            fi
+# 6d: Simulation Interactions Diagram — Schrödinger native SIMA (two-step EAF pipeline)
+header "6d. Simulation Interactions Diagram (Schrödinger SIMA)"
+
+# Auto-detect largest non-water molecule for ligand designation
+LIGAND_ASL=$($RUN_SCHROD python3 -c "
+import schrodinger.structure as st
+max_atoms, best_mol = 0, 'mol. 1'
+for i, s in enumerate(st.StructureReader('$CMS')):
+    # Skip water boxes (they have many O atoms and are titled 'TIP3P' or 'water')
+    is_water = 'tip3p' in s.title.lower() or 'water' in s.title.lower() or 'spc' in s.title.lower()
+    if not is_water and s.atom_total > max_atoms:
+        max_atoms = s.atom_total
+        best_mol = f'mol. {i+1}'
+print(best_mol)
+" 2>&1)
+
+log "  Detected ligand: $LIGAND_ASL"
+
+# Step 1: event_analysis.py → generate .eaf
+EAF_PREFIX="$ANADIR/sima_eaf"
+log "Step 1: event_analysis.py analyze..."
+# Suppress X11 forwarding (headless server)
+unset DISPLAY 2>/dev/null || true
+$RUN_SCHROD python3 "$SCHRODINGER/mmshare-v7.0/python/scripts/event_analysis.py" analyze \
+    -prot "none" -lig "$LIGAND_ASL" -o "$EAF_PREFIX" \
+    "$CMS" 2>&1 | tail -1
+
+EAF_IN="${EAF_PREFIX}-in.eaf"
+EAF_OUT="${EAF_PREFIX}-out.eaf"
+
+if [[ -f "$EAF_IN" ]]; then
+    log "  → ${EAF_PREFIX}-in.eaf generated"
+    
+    # Step 2: analyze_simulation.py with EAF
+    log "Step 2: analyze_simulation.py..."
+    unset DISPLAY 2>/dev/null || true
+    SIMA_LOG=$(mktemp)
+    if $RUN_SCHROD python3 "$SCHRODINGER/internal/bin/analyze_simulation.py" \
+        -WAIT -LOCAL \
+        ${CFG:+-sim-cfg "$CFG"} \
+        "$CMS" "$TRJ" "$EAF_PREFIX" "$EAF_IN" > "$SIMA_LOG" 2>&1; then
+        tail -3 "$SIMA_LOG" | while IFS= read -r l; do log "  $l"; done
+    else
+        warn "SIMA analysis failed:"
+        tail -3 "$SIMA_LOG" | while IFS= read -r l; do warn "  $l"; done
+    fi
+    rm -f "$SIMA_LOG"
+    
+    # Find the actual output file (may be EAF_PREFIX without .eaf extension)
+    EAF_FILE="$EAF_OUT"
+    [[ ! -f "$EAF_FILE" ]] && EAF_FILE="$EAF_PREFIX"
+    [[ ! -f "$EAF_FILE" ]] && EAF_FILE="${EAF_PREFIX}-out"
+    
+    if [[ -f "$EAF_FILE" ]]; then
+        log "SIMA results: $(du -h "$EAF_FILE" | cut -f1)"
+        
+        # Extract data
+        DATA_DIR="$ANADIR/data"
+        mkdir -p "$DATA_DIR"
+        EXTRACTOR="$SCRIPT_DIR/functions/extract_sima.py"
+        if [[ -f "$EXTRACTOR" ]]; then
+            python3 "$EXTRACTOR" "$EAF_FILE" "$DATA_DIR"
+            NCSV=$(find "$DATA_DIR" -name "*.csv" 2>/dev/null | wc -l)
+            log "  → Extracted $NCSV CSV + .dat files to $DATA_DIR/"
+        else
+            warn "extract_sima.py not found"
+        fi
+        
+        # Plot SIMA figures (properties dashboard + torsion radar/heatmap)
+        SIMA_PLOT_SCRIPT="$SCRIPT_DIR/functions/sima_plot.py"
+        if [[ -f "$SIMA_PLOT_SCRIPT" ]]; then
+            python3 "$SIMA_PLOT_SCRIPT" "$DATA_DIR" --type all 2>&1 | grep '✓' | while IFS= read -r l; do log "  $l"; done
         fi
         report "── Simulation Interactions Diagram ──"
-        report "  .dat files generated + plotted"
+        report "  Schrödinger SIMA: L-Properties + L_Torsions .dat generated"
     else
-        warn "SIMA generation failed (non-critical)"
+        warn "SIMA output file not found"
     fi
 else
-    skip "SIMA generation (sima_gen.py not found)"
+    warn "event_analysis.py failed — no .eaf generated"
 fi
 
 report_sep
@@ -838,33 +945,43 @@ if [[ -f "$FREEVOL_SCRIPT" ]]; then
 else
     skip "Free volume (freevol_gen.py not found)"
 fi
-report_sep
+report_sep || true
 
 # ============================================================
-# ANALYSIS 15: Publication-quality Plotting (if --plot)
+# ANALYSIS 15: Publication-quality Plotting (always)
 # ============================================================
-if [[ "$DO_PLOT" -eq 1 ]]; then
-    header "15. Generating Publication Figures"
-    cd "$ANADIR"
+header "15. Generating Publication Figures"
+cd "$ANADIR"
 
-    PLOT_SCRIPT="$SCRIPT_DIR/functions/desmond_plot.py"
-    if [[ ! -f "$PLOT_SCRIPT" ]]; then
-        error "desmond_plot.py not found at $PLOT_SCRIPT"
+PLOT_SCRIPT="$SCRIPT_DIR/functions/desmond_plot.py"
+if [[ ! -f "$PLOT_SCRIPT" ]]; then
+    error "desmond_plot.py not found at $PLOT_SCRIPT"
+else
+    log "Running plot generation (type: $PLOT_TYPE)..."
+    PLOT_LOG=$(mktemp)
+    set +e
+    python3 "$PLOT_SCRIPT" "$ANADIR" --type "$PLOT_TYPE" >"$PLOT_LOG" 2>&1
+    PLOT_EXIT=$?
+    set -e
+    if [[ $PLOT_EXIT -ne 0 ]]; then
+        warn "Plot generation FAILED (exit code: $PLOT_EXIT)"
+        warn "Full log: $PLOT_LOG"
+        cat "$PLOT_LOG" | while IFS= read -r line; do
+            warn "  $line"
+        done
     else
-        log "Running plot generation (type: $PLOT_TYPE)..."
-        PLOT_LOG=$(mktemp)
-        PYPLOT_OUT=$(python3 "$PLOT_SCRIPT" "$ANADIR" --type "$PLOT_TYPE" 2>&1)
-        echo "$PYPLOT_OUT" | while IFS= read -r line; do
+        cat "$PLOT_LOG" | while IFS= read -r line; do
             log "  $line"
         done
-
-        # Count generated figures
-        NPDF=$(find "$ANADIR/figures" -name "*.pdf" 2>/dev/null | wc -l)
-        NPNG=$(find "$ANADIR/figures" -name "*.png" 2>/dev/null | wc -l)
-        log "Generated: $NPDF PDFs + $NPNG PNGs"
     fi
-    report_sep
+    rm -f "$PLOT_LOG"
+
+    # Count generated figures
+    NPDF=$(find "$ANADIR/figures" -name "*.pdf" 2>/dev/null | wc -l)
+    NPNG=$(find "$ANADIR/figures" -name "*.png" 2>/dev/null | wc -l)
+    log "Generated: $NPDF PDFs + $NPNG PNGs"
 fi
+report_sep
 
 # ============================================================
 # FINAL: Generate Report
